@@ -96,6 +96,16 @@ Fine-grained token permissions for public repository analysis:
 - Pull requests: read-only
 - Metadata: read-only
 
+## GitHub Pages Demo
+
+Static demo URL:
+
+```text
+https://stepandrogin.github.io/CodeAtlas/
+```
+
+The GitHub Pages build is a portfolio demo generated with `npm run build:pages` and `NUXT_PUBLIC_DEMO_MODE=true`. GitHub Pages does not run Nuxt server API routes or private environment variables, so live repository analysis and future LLM calls need a server-capable host.
+
 ## Demo Flow
 
 1. Open `http://localhost:3000`.

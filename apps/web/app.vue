@@ -11,6 +11,7 @@ import {
 } from '~/data/demo'
 import type { NavSection, PullRequestReview, RepositoryAnalysis, SourceReference } from '~/types/codeatlas'
 
+const config = useRuntimeConfig()
 const activeSection = ref<NavSection>('repository')
 const repoUrl = ref('github.com/nuxt/nuxt')
 const prUrl = ref('github.com/nuxt/nuxt/pull/32537')
@@ -32,6 +33,7 @@ const pullRequests = computed(() => analysis.value?.pullRequests ?? demoPullRequ
 const summaryItems = computed(() => analysis.value?.summaryItems ?? demoSummaryItems)
 const riskSignals = computed(() => analysis.value?.riskSignals ?? demoRiskSignals)
 const activePullRequestReview = computed(() => prReview.value ?? demoPullRequestReview)
+const isDemoMode = computed(() => String(config.public.demoMode) === 'true')
 
 const analyzeRepository = async () => {
   if (!repoUrl.value.trim() || isAnalyzing.value) {
@@ -43,12 +45,14 @@ const analyzeRepository = async () => {
   lastAnalyzedAt.value = 'Analysis started now'
 
   try {
-    const result = await $fetch<RepositoryAnalysis>('/api/repositories/analyze', {
-      method: 'POST',
-      body: {
-        repository: repoUrl.value
-      }
-    })
+    const result = isDemoMode.value
+      ? buildDemoRepositoryAnalysis(repoUrl.value)
+      : await $fetch<RepositoryAnalysis>('/api/repositories/analyze', {
+          method: 'POST',
+          body: {
+            repository: repoUrl.value
+          }
+        })
 
     analysis.value = result
     repoUrl.value = `github.com/${result.repository.fullName}`
@@ -73,16 +77,82 @@ const reviewPullRequest = async () => {
   prReviewError.value = ''
 
   try {
-    prReview.value = await $fetch<PullRequestReview>('/api/pull-requests/review', {
-      method: 'POST',
-      body: {
-        pullRequest: prUrl.value
-      }
-    })
+    prReview.value = isDemoMode.value
+      ? buildDemoPullRequestReview(prUrl.value)
+      : await $fetch<PullRequestReview>('/api/pull-requests/review', {
+          method: 'POST',
+          body: {
+            pullRequest: prUrl.value
+          }
+        })
   } catch (error) {
     prReviewError.value = getErrorMessage(error)
   } finally {
     isReviewingPr.value = false
+  }
+}
+
+const buildDemoRepositoryAnalysis = (repository: string): RepositoryAnalysis => {
+  const fullName = normalizeRepositoryFullName(repository) ?? 'acme/codeatlas'
+
+  return {
+    repository: {
+      fullName,
+      description: 'Static CodeAtlas demo repository.',
+      defaultBranch: 'main',
+      url: `https://github.com/${fullName}`,
+      language: 'TypeScript',
+      stars: 12400,
+      forks: 920,
+      fileCount: 1842,
+      estimatedLoc: 612000,
+      truncated: false
+    },
+    architectureNodes: demoArchitectureNodes,
+    sourceReferences: demoSourceReferences,
+    pullRequests: demoPullRequests,
+    summaryItems: demoSummaryItems,
+    riskSignals: demoRiskSignals,
+    technologies: ['TypeScript', 'Nuxt', 'Vue', 'Node.js'],
+    answer:
+      'CodeAtlas is running in static demo mode for GitHub Pages. Deploy to a server-capable host to enable live GitHub API analysis and future LLM calls.',
+    analyzedAt: new Date().toISOString()
+  }
+}
+
+const buildDemoPullRequestReview = (pullRequest: string): PullRequestReview => {
+  const parsed = parsePullRequestUrl(pullRequest)
+
+  return {
+    ...demoPullRequestReview,
+    id: parsed ? `#${parsed.number}` : demoPullRequestReview.id,
+    repositoryFullName: parsed?.repositoryFullName ?? demoPullRequestReview.repositoryFullName,
+    url: pullRequest.trim() || demoPullRequestReview.url,
+    analyzedAt: new Date().toISOString()
+  }
+}
+
+const normalizeRepositoryFullName = (value: string) => {
+  const cleaned = value.trim().replace(/^https?:\/\//, '').replace(/^github\.com\//, '').replace(/\/$/, '')
+  const [owner, repo] = cleaned.split('/')
+
+  if (!owner || !repo) {
+    return null
+  }
+
+  return `${owner}/${repo}`
+}
+
+const parsePullRequestUrl = (value: string) => {
+  const match = value.trim().match(/(?:github\.com\/)?([^/\s]+)\/([^/\s]+)\/pull\/(\d+)/)
+
+  if (!match) {
+    return null
+  }
+
+  return {
+    repositoryFullName: `${match[1]}/${match[2]}`,
+    number: Number(match[3])
   }
 }
 

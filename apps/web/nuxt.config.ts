@@ -7,7 +7,10 @@ export default defineNuxtConfig({
     appManifest: false
   },
   runtimeConfig: {
-    githubToken: ''
+    githubToken: '',
+    public: {
+      demoMode: false
+    }
   },
   build: {
     transpile: ['@codeatlas/analyzer']
@@ -19,7 +22,7 @@ export default defineNuxtConfig({
         {
           name: 'description',
           content:
-            'AI-powered codebase intelligence platform for GitHub repositories.'
+            'AI-ready codebase intelligence platform for GitHub repositories.'
         }
       ]
     }
