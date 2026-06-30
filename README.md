@@ -1,22 +1,51 @@
 # CodeAtlas
 
-AI-powered codebase intelligence platform for GitHub repositories.
+[![CI](https://github.com/StepanDrogin/CodeAtlas/actions/workflows/ci.yml/badge.svg)](https://github.com/StepanDrogin/CodeAtlas/actions/workflows/ci.yml)
 
-CodeAtlas turns a repository into an architecture map, searchable project knowledge base, PR review assistant, and observability view for AI analysis jobs.
+AI-ready codebase intelligence platform for GitHub repositories.
 
-## MVP Scope
+CodeAtlas turns a public GitHub repository into an architecture map, searchable project knowledge base, PR review assistant, and observability dashboard for analysis jobs.
 
-- Public GitHub repository URL analysis flow powered by the GitHub REST API.
+![CodeAtlas dashboard](docs/screenshots/codeatlas-dashboard.png)
+
+## Why This Project Exists
+
+Large codebases are hard to enter quickly. CodeAtlas gives a developer a first working mental model:
+
+- what the repository is built with;
+- where the important files are;
+- how the architecture is shaped;
+- which risks are visible from repository metadata;
+- what a pull request changes and what deserves review attention.
+
+The current MVP uses deterministic analysis over GitHub API data. The next planned layer is real LLM integration for richer summaries, Q&A, and PR comments.
+
+## Features
+
+- Public GitHub repository analysis through the GitHub REST API.
 - Repository metadata, tree, README, package manifests, and open pull requests.
-- Architecture map for services, workers, data stores, and external integrations.
-- Heuristic summary with purpose, architecture, strengths, risks, and opportunities.
-- Source references table with file search and typed module filters.
-- PR review queue with risk levels, changed files, and open/draft status.
-- PR deep review mode with affected modules, missing tests, security concerns, breaking-change signals, and suggested comments.
+- Architecture map grouped by entry, backend, workers, and data layers.
+- Source references table with file search and type filters.
+- PR review mode with affected modules, missing tests, security concerns, breaking-change signals, and suggested comments.
+- Risk signals for missing tests, missing CI, truncated trees, env-like files, and install lifecycle scripts.
 - Observability strip for latency, error rate, requests, token usage, cost, and jobs.
-- MCP server scaffold for AI coding tools.
+- MCP stdio server scaffold for AI coding tools.
 - Composite GitHub Action scaffold for PR review workflows.
 - CI and Docker packaging.
+
+## Screenshots
+
+### Repository Intelligence
+
+![Repository intelligence](docs/screenshots/codeatlas-dashboard.png)
+
+### Knowledge And References
+
+![Knowledge and references](docs/screenshots/codeatlas-knowledge.png)
+
+### PR Review
+
+![PR review](docs/screenshots/codeatlas-pr-review.png)
 
 ## Tech Stack
 
@@ -24,7 +53,10 @@ CodeAtlas turns a repository into an architecture map, searchable project knowle
 - Vue 3 Composition API
 - TypeScript
 - Tailwind CSS with project design tokens
+- Node built-in test runner
 - npm workspaces
+- GitHub REST API
+- Docker
 
 ## Project Structure
 
@@ -34,7 +66,8 @@ apps/
   mcp-server/     Dependency-free MCP stdio server
   web/            Nuxt dashboard app
 docs/
-  design/         Generated UI concept references
+  demo-script.md  Manual demo checklist
+  screenshots/    README screenshots
 packages/
   analyzer/       Pure repository and PR analysis package
 ```
@@ -43,12 +76,46 @@ packages/
 
 ```bash
 npm install
+copy .env.example .env
 npm run dev
 ```
 
-The web app runs from `apps/web`.
+The web app runs on `http://localhost:3000`.
 
-For higher GitHub API limits, set `NUXT_GITHUB_TOKEN` before starting the dev server. Public repositories work without a token until the unauthenticated GitHub API rate limit is reached.
+Set `NUXT_GITHUB_TOKEN` in `.env` for higher GitHub API limits:
+
+```env
+NUXT_GITHUB_TOKEN=your_github_token
+```
+
+The root `npm run dev` script forwards this root `.env` file to the Nuxt workspace.
+
+Fine-grained token permissions for public repository analysis:
+
+- Contents: read-only
+- Pull requests: read-only
+- Metadata: read-only
+
+## Demo Flow
+
+1. Open `http://localhost:3000`.
+2. Analyze a repository:
+
+```text
+github.com/nuxt/nuxt
+```
+
+3. Review a pull request:
+
+```text
+https://github.com/nuxt/nuxt/pull/35489
+```
+
+4. Ask a local question in the command bar:
+
+```text
+Where is app config handled?
+```
 
 ## Quality Gates
 
@@ -58,15 +125,11 @@ npm run test
 npm run build
 ```
 
-The analyzer package is built and tested separately before the Nuxt app consumes it. The MCP server is also typechecked and built from the root quality gates.
+What these cover:
 
-## Docker
-
-```bash
-docker compose up --build
-```
-
-The container exposes the Nuxt app on `http://localhost:3000`.
+- `@codeatlas/analyzer` typecheck and unit tests.
+- MCP server typecheck and build.
+- Nuxt typecheck and production build.
 
 ## API Surface
 
@@ -78,7 +141,21 @@ POST /api/pull-requests/review
 body: { "pullRequest": "github.com/owner/repo/pull/123" }
 ```
 
-Both endpoints use the GitHub REST API and share the same `NUXT_GITHUB_TOKEN` runtime config.
+Both endpoints use the GitHub REST API and the same `NUXT_GITHUB_TOKEN` runtime config.
+
+## Analyzer Package
+
+`packages/analyzer` is pure TypeScript and has no network dependency. It accepts repository or PR snapshots and returns UI-ready intelligence:
+
+- technologies;
+- architecture nodes;
+- source references;
+- summary items;
+- risk signals;
+- PR module impact;
+- suggested review comments.
+
+This keeps GitHub I/O in Nuxt server routes and analysis logic in a testable package.
 
 ## MCP Server
 
@@ -91,8 +168,6 @@ Implemented tools:
 
 - `analyze_repository_snapshot`
 - `review_pull_request_snapshot`
-
-The server is intentionally dependency-free and delegates analysis to `@codeatlas/analyzer`.
 
 ## GitHub Action
 
@@ -107,11 +182,19 @@ The composite action lives in `apps/github-action`.
 
 Human setup still required: deploy the Nuxt app somewhere reachable by GitHub Actions, then pass that URL as `codeatlas-api-url`.
 
-## Architecture Direction
+## Docker
+
+```bash
+docker compose up --build
+```
+
+The container exposes the Nuxt app on `http://localhost:3000`.
+
+## Architecture
 
 ```mermaid
 flowchart LR
-  Web[Nuxt dashboard] --> API[CodeAtlas API]
+  Web[Nuxt dashboard] --> API[Nuxt server API]
   API --> GitHub[GitHub REST API]
   API --> Analyzer[Analyzer package]
   MCP[MCP server] --> Analyzer
@@ -119,11 +202,23 @@ flowchart LR
   Analyzer --> UI[Architecture, references, risks, PR review]
 ```
 
+## Current AI Status
+
+The MVP does not call an LLM yet. It currently analyzes repositories with deterministic, testable rules over GitHub API data.
+
+Planned AI layer:
+
+- LLM-generated repository summaries.
+- Codebase Q&A with exact file and line references.
+- AI-assisted PR review comments.
+- Onboarding guide generation.
+- Optional embeddings for semantic search.
+
 ## Roadmap
 
+- Add real OpenAI-powered summaries and Q&A.
 - Add persisted analysis jobs and background workers.
 - Add embeddings and semantic code search.
-- Add codebase Q&A with exact file and line references.
-- Turn the GitHub Action into a published Marketplace action.
 - Add private repository support through GitHub App installation.
-- Add OpenTelemetry tracing and real cost dashboards.
+- Publish the GitHub Action.
+- Add OpenTelemetry traces and real cost dashboards.

@@ -7,7 +7,7 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "npm run build -w @codeatlas/analyzer && npm run dev -w @codeatlas/web",
+    "dev": "npm run build -w @codeatlas/analyzer && npm run dev -w @codeatlas/web -- --dotenv ../../.env",
     "build": "npm run build -w @codeatlas/analyzer && npm run build -w @codeatlas/mcp-server && npm run build -w @codeatlas/web",
     "typecheck": "npm run typecheck -w @codeatlas/analyzer && npm run build -w @codeatlas/analyzer && npm run typecheck -w @codeatlas/mcp-server && npm run typecheck -w @codeatlas/web",
     "test": "npm run test -w @codeatlas/analyzer"

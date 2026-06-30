@@ -18,14 +18,14 @@ Optional: set `NUXT_GITHUB_TOKEN` in `.env` to avoid GitHub unauthenticated rate
 2. Paste a public repository URL, for example `github.com/nuxt/nuxt`.
 3. Run repository analysis and show:
    - architecture map
-   - AI summary
+   - Analysis summary
    - source references
    - repository risk signals
 4. Ask a local question in the command bar:
    - `Where is app config handled?`
    - `Which files should I inspect before changing routing?`
 5. Open PR Review and paste a public PR URL:
-   - `github.com/owner/repo/pull/123`
+   - `https://github.com/nuxt/nuxt/pull/35489`
 6. Show:
    - affected modules
    - missing test signals

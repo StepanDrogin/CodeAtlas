@@ -130,7 +130,7 @@ export const sourceReferences: SourceReference[] = [
     file: 'apps/worker/src/jobs/analyze.ts',
     type: 'TS',
     service: 'Job Processor',
-    description: 'Chunking, embeddings, AI summary jobs',
+    description: 'Chunking, embeddings, analysis summary jobs',
     loc: 284,
     updated: '5h ago'
   },
