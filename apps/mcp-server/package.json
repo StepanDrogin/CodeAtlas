@@ -1,0 +1,20 @@
+{
+  "name": "@codeatlas/mcp-server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "codeatlas-mcp": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@codeatlas/analyzer": "0.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3"
+  }
+}

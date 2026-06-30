@@ -1,0 +1,22 @@
+name: CodeAtlas PR Review
+description: Review a GitHub pull request with a running CodeAtlas API.
+inputs:
+  codeatlas-api-url:
+    description: Base URL of a deployed CodeAtlas web app.
+    required: false
+  github-token:
+    description: GitHub token available to the workflow.
+    required: false
+  pr-url:
+    description: Pull request URL. Defaults to the current pull_request event.
+    required: false
+runs:
+  using: composite
+  steps:
+    - name: Run CodeAtlas review
+      shell: bash
+      env:
+        INPUT_CODEATLAS_API_URL: ${{ inputs.codeatlas-api-url }}
+        INPUT_GITHUB_TOKEN: ${{ inputs.github-token }}
+        INPUT_PR_URL: ${{ inputs.pr-url }}
+      run: node "$GITHUB_ACTION_PATH/review.mjs"

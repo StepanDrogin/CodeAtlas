@@ -1,0 +1,10 @@
+services:
+  web:
+    build:
+      context: .
+    environment:
+      NUXT_GITHUB_TOKEN: ${NUXT_GITHUB_TOKEN:-}
+      HOST: 0.0.0.0
+      PORT: 3000
+    ports:
+      - "3000:3000"

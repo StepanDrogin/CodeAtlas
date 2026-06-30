@@ -1,0 +1,14 @@
+node_modules
+apps/*/node_modules
+packages/*/node_modules
+.nuxt
+.output
+dist
+coverage
+output
+.playwright-cli
+.codex-devserver.*.log
+.git
+.env
+.env.*
+npm-debug.log*
