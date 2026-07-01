@@ -9,6 +9,7 @@ defineProps<{
 
 defineEmits<{
   analyze: []
+  'view-report': []
 }>()
 </script>
 
@@ -55,7 +56,11 @@ defineEmits<{
           <p class="text-xs text-atlas-muted">{{ analysisError || (isAnalyzing ? 'Indexing repository graph and references' : lastAnalyzedAt) }}</p>
         </div>
       </div>
-      <button type="button" class="ui-button h-9 whitespace-nowrap border-atlas-border bg-white px-3 text-atlas-ink hover:border-atlas-accent hover:text-atlas-accent">
+      <button
+        type="button"
+        class="ui-button h-9 whitespace-nowrap border-atlas-border bg-white px-3 text-atlas-ink hover:border-atlas-accent hover:text-atlas-accent"
+        @click="$emit('view-report')"
+      >
         <span class="ui-span">View report</span>
       </button>
     </div>
