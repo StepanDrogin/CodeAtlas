@@ -121,26 +121,34 @@ The GitHub Pages build is a portfolio demo generated with `npm run build:pages` 
 
 ## Server Deployment With AI
 
-For a public live demo with GitHub API calls and Gemini, use the Docker-backed Render Blueprint in `render.yaml`.
+For a public live demo with GitHub API calls and Gemini, deploy the Nuxt app to Vercel.
 
 1. Push this repository to GitHub.
-2. In Render, choose **New > Blueprint** and connect `StepanDrogin/CodeAtlas`.
-3. Select the `main` branch and the root `render.yaml` file.
-4. Fill the secret environment variables Render asks for:
+2. In Vercel, choose **Add New > Project**.
+3. Import `StepanDrogin/CodeAtlas`.
+4. In **Root Directory**, choose `apps/web`.
+5. Keep the framework preset as **Nuxt.js**.
+6. Keep the build settings from `apps/web/vercel.json`:
+
+```text
+Install Command: npm ci
+Build Command: npm run build -w @codeatlas/analyzer && npm run build
+```
+
+7. Add production environment variables:
 
 ```text
 NUXT_GITHUB_TOKEN=your_github_token
 GEMINI_API_KEY=your_gemini_api_key
 ```
 
-The Blueprint sets non-secret runtime values automatically:
+Optional:
 
 ```text
 GEMINI_MODEL=gemini-3.5-flash
-NUXT_PUBLIC_DEMO_MODE=false
 ```
 
-Render builds the existing Dockerfile, starts the Nuxt server, and exposes the full server API routes used by live repository analysis and AI Q&A.
+`NUXT_PUBLIC_DEMO_MODE` defaults to `false`, so Vercel runs the live Nuxt server API routes for repository analysis, PR review, and Gemini Q&A.
 
 ## Demo Flow
 
