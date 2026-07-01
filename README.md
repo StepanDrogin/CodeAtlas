@@ -18,7 +18,7 @@ Large codebases are hard to enter quickly. CodeAtlas gives a developer a first w
 - which risks are visible from repository metadata;
 - what a pull request changes and what deserves review attention.
 
-The current MVP uses deterministic analysis over GitHub API data. The next planned layer is real LLM integration for richer summaries, Q&A, and PR comments.
+The current MVP uses deterministic analysis over GitHub API data as the reliable baseline and can enhance repository summaries, Q&A, and PR review copy with Google Gemini when a server-side API key is configured.
 
 ## Features
 
@@ -29,6 +29,8 @@ The current MVP uses deterministic analysis over GitHub API data. The next plann
 - PR review mode with affected modules, missing tests, security concerns, breaking-change signals, and suggested comments.
 - Risk signals for missing tests, missing CI, truncated trees, env-like files, and install lifecycle scripts.
 - Observability strip for latency, error rate, requests, token usage, cost, and jobs.
+- Section-based dashboard navigation for repository, architecture, Q&A, PR review, observability, bookmarks, reports, integrations, and settings.
+- Optional Gemini-powered repository summaries, Q&A, and PR review refinement through Nuxt server routes.
 - MCP stdio server scaffold for AI coding tools.
 - Composite GitHub Action scaffold for PR review workflows.
 - CI and Docker packaging.
@@ -43,9 +45,17 @@ The current MVP uses deterministic analysis over GitHub API data. The next plann
 
 ![Knowledge and references](docs/screenshots/codeatlas-knowledge.png)
 
+### Architecture Map
+
+![Architecture map](docs/screenshots/codeatlas-architecture.png)
+
 ### PR Review
 
 ![PR review](docs/screenshots/codeatlas-pr-review.png)
+
+### Workspace Settings
+
+![Workspace settings](docs/screenshots/codeatlas-settings.png)
 
 ## Tech Stack
 
@@ -56,6 +66,7 @@ The current MVP uses deterministic analysis over GitHub API data. The next plann
 - Node built-in test runner
 - npm workspaces
 - GitHub REST API
+- Google Gemini API
 - Docker
 
 ## Project Structure
