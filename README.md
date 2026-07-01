@@ -119,6 +119,29 @@ https://stepandrogin.github.io/CodeAtlas/
 
 The GitHub Pages build is a portfolio demo generated with `npm run build:pages` and `NUXT_PUBLIC_DEMO_MODE=true`. GitHub Pages does not run Nuxt server API routes or private environment variables, so live repository analysis and future LLM calls need a server-capable host.
 
+## Server Deployment With AI
+
+For a public live demo with GitHub API calls and Gemini, use the Docker-backed Render Blueprint in `render.yaml`.
+
+1. Push this repository to GitHub.
+2. In Render, choose **New > Blueprint** and connect `StepanDrogin/CodeAtlas`.
+3. Select the `main` branch and the root `render.yaml` file.
+4. Fill the secret environment variables Render asks for:
+
+```text
+NUXT_GITHUB_TOKEN=your_github_token
+GEMINI_API_KEY=your_gemini_api_key
+```
+
+The Blueprint sets non-secret runtime values automatically:
+
+```text
+GEMINI_MODEL=gemini-3.5-flash
+NUXT_PUBLIC_DEMO_MODE=false
+```
+
+Render builds the existing Dockerfile, starts the Nuxt server, and exposes the full server API routes used by live repository analysis and AI Q&A.
+
 ## Demo Flow
 
 1. Open `http://localhost:3000`.

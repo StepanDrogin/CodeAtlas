@@ -4,6 +4,9 @@ services:
       context: .
     environment:
       NUXT_GITHUB_TOKEN: ${NUXT_GITHUB_TOKEN:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.5-flash}
+      NUXT_PUBLIC_DEMO_MODE: "false"
       HOST: 0.0.0.0
       PORT: 3000
     ports:
