@@ -11,6 +11,10 @@ import {
 } from '~/data/demo'
 import type { NavSection, PullRequestReview, RepositoryAnalysis, SourceReference } from '~/types/codeatlas'
 
+interface AiQuestionResponse {
+  answer: string
+}
+
 const config = useRuntimeConfig()
 const activeSection = ref<NavSection>('repository')
 const repoUrl = ref('github.com/nuxt/nuxt')
@@ -156,7 +160,7 @@ const parsePullRequestUrl = (value: string) => {
   }
 }
 
-const askCodeAtlas = () => {
+const askCodeAtlas = async () => {
   const normalizedQuestion = question.value.trim()
 
   if (!normalizedQuestion) {
@@ -166,8 +170,31 @@ const askCodeAtlas = () => {
   const matches = findRelevantReferences(normalizedQuestion, sourceReferences.value)
   const files = matches.map((reference) => reference.file).join(', ')
   const repoName = analysis.value?.repository.fullName ?? 'the demo repository'
+  const fallbackAnswer = `For "${normalizedQuestion}", start in ${files}. CodeAtlas selected these files from ${repoName} because their path, service, or description best matched the question.`
 
-  answer.value = `For "${normalizedQuestion}", start in ${files}. CodeAtlas selected these files from ${repoName} because their path, service, or description best matched the question.`
+  if (isDemoMode.value) {
+    answer.value = fallbackAnswer
+
+    return
+  }
+
+  answer.value = 'Asking Gemini with the current CodeAtlas source references...'
+
+  try {
+    const result = await $fetch<AiQuestionResponse>('/api/ai/question', {
+      method: 'POST',
+      body: {
+        question: normalizedQuestion,
+        repositoryFullName: repoName,
+        references: sourceReferences.value,
+        risks: riskSignals.value
+      }
+    })
+
+    answer.value = result.answer || fallbackAnswer
+  } catch {
+    answer.value = fallbackAnswer
+  }
 }
 
 const findRelevantReferences = (query: string, references: SourceReference[]) => {

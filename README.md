@@ -82,10 +82,12 @@ npm run dev
 
 The web app runs on `http://localhost:3000`.
 
-Set `NUXT_GITHUB_TOKEN` in `.env` for higher GitHub API limits:
+Set `NUXT_GITHUB_TOKEN` in `.env` for higher GitHub API limits and `GEMINI_API_KEY` for AI summaries, Q&A, and PR review copy:
 
 ```env
 NUXT_GITHUB_TOKEN=your_github_token
+GEMINI_API_KEY=your_gemini_api_key
+GEMINI_MODEL=gemini-3.5-flash
 ```
 
 The root `npm run dev` script forwards this root `.env` file to the Nuxt workspace.
@@ -149,9 +151,12 @@ body: { "repository": "github.com/owner/repo" }
 
 POST /api/pull-requests/review
 body: { "pullRequest": "github.com/owner/repo/pull/123" }
+
+POST /api/ai/question
+body: { "question": "Where is routing configured?", "repositoryFullName": "owner/repo", "references": [] }
 ```
 
-Both endpoints use the GitHub REST API and the same `NUXT_GITHUB_TOKEN` runtime config.
+Repository and PR endpoints use the GitHub REST API and the same `NUXT_GITHUB_TOKEN` runtime config. When `GEMINI_API_KEY` is available, they also ask Gemini to refine dashboard summaries, PR summaries, suggested comments, and command-bar Q&A.
 
 ## Analyzer Package
 
@@ -214,19 +219,17 @@ flowchart LR
 
 ## Current AI Status
 
-The MVP does not call an LLM yet. It currently analyzes repositories with deterministic, testable rules over GitHub API data.
+The app uses deterministic, testable repository analysis as the baseline and optionally enhances results with Gemini through server-side REST calls.
 
-Planned AI layer:
+Implemented Gemini layer:
 
-- LLM-generated repository summaries.
-- Codebase Q&A with exact file and line references.
-- AI-assisted PR review comments.
-- Onboarding guide generation.
-- Optional embeddings for semantic search.
+- repository dashboard summary refinement;
+- command-bar Q&A over indexed source references;
+- AI-assisted PR review summary and suggested comments;
+- deterministic fallback when Gemini is not configured or returns an invalid response.
 
 ## Roadmap
 
-- Add real OpenAI-powered summaries and Q&A.
 - Add persisted analysis jobs and background workers.
 - Add embeddings and semantic code search.
 - Add private repository support through GitHub App installation.

@@ -8,6 +8,8 @@ export default defineNuxtConfig({
   },
   runtimeConfig: {
     githubToken: '',
+    geminiApiKey: '',
+    geminiModel: 'gemini-3.5-flash',
     public: {
       demoMode: false
     }

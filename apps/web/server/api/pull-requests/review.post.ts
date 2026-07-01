@@ -3,6 +3,7 @@ import {
   type PullRequestFileSnapshot,
   type PullRequestReview
 } from '@codeatlas/analyzer'
+import { enhancePullRequestReviewWithGemini } from '../../utils/codeatlas-ai'
 import { githubRequest, parsePullRequest } from '../../utils/github'
 
 interface ReviewBody {
@@ -51,7 +52,7 @@ export default defineEventHandler(async (event): Promise<PullRequestReview> => {
     fetchPullRequestFiles(parsed.owner, parsed.repo, parsed.number)
   ])
 
-  return analyzePullRequestSnapshot({
+  const review = analyzePullRequestSnapshot({
     repositoryFullName: pullRequest.base.repo.full_name,
     pullRequest: {
       number: pullRequest.number,
@@ -69,6 +70,8 @@ export default defineEventHandler(async (event): Promise<PullRequestReview> => {
     },
     files
   })
+
+  return await enhancePullRequestReviewWithGemini(review, files)
 })
 
 async function fetchPullRequestFiles(owner: string, repo: string, number: number): Promise<PullRequestFileSnapshot[]> {

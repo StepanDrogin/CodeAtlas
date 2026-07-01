@@ -10,6 +10,7 @@ import {
   parseRepository,
   type ParsedRepository
 } from '../../utils/github'
+import { enhanceRepositoryAnalysisWithGemini } from '../../utils/codeatlas-ai'
 
 interface AnalyzeBody {
   repository?: string
@@ -63,7 +64,7 @@ export default defineEventHandler(async (event): Promise<RepositoryAnalysis> => 
     fetchPullRequests(parsed)
   ])
 
-  return analyzeRepositorySnapshot({
+  const analysis = analyzeRepositorySnapshot({
     repository: {
       fullName: repo.full_name,
       description: repo.description ?? '',
@@ -82,6 +83,8 @@ export default defineEventHandler(async (event): Promise<RepositoryAnalysis> => 
     pullRequests,
     treeTruncated: treeResponse.truncated
   })
+
+  return await enhanceRepositoryAnalysisWithGemini(analysis)
 })
 
 async function fetchReadme(repository: ParsedRepository) {
