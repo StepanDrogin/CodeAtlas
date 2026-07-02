@@ -19,6 +19,8 @@ import type {
   PullRequestReview,
   RecentAnalysis,
   RepositoryAnalysis,
+  SavedReference,
+  SavedReferencePriority,
   SourceReference,
   WorkspaceSetupStep
 } from '~/types/codeatlas'
@@ -53,6 +55,7 @@ interface StoredWorkspace {
   lastSavedAt: string
   lastReportExportedAt: string
   aiSessionHistory: AiSessionItem[]
+  savedReferences: SavedReference[]
   analysis: RepositoryAnalysis | null
   prReview: PullRequestReview | null
   recentAnalyses: RecentAnalysis[]
@@ -92,6 +95,7 @@ const ANALYSIS_TIMELINE_BASE = [
     detail: 'Build grounded source references for Gemini and local fallback answers.'
   }
 ] as const
+const SAVED_REFERENCE_PRIORITIES: SavedReferencePriority[] = ['Critical path', 'Architecture', 'API boundary', 'Review context', 'Watch']
 
 const config = useRuntimeConfig()
 const activeSection = ref<NavSection>('repository')
@@ -113,6 +117,7 @@ const activityLog = ref<ActivityLogItem[]>([])
 const recentAnalyses = ref<RecentAnalysis[]>([])
 const savedWorkspaces = ref<StoredWorkspace[]>([])
 const aiSessionHistory = ref<AiSessionItem[]>([])
+const savedReferences = ref<SavedReference[]>([])
 const lastQuestion = ref('')
 const lastMatchedReferences = ref<SourceReference[]>([])
 const lastAiConfidence = ref(82)
@@ -174,7 +179,7 @@ const sectionMeta = computed(() => {
     case 'observability':
       return `${metrics.length} live-style metrics`
     case 'bookmarks':
-      return `${bookmarkedReferences.value.length} saved references`
+      return savedReferences.value.length ? `${savedReferences.value.length} saved references` : `${bookmarkedReferences.value.length} suggested references`
     case 'reports':
       return `${reportRows.value.length} generated reports`
     case 'integrations':
@@ -349,12 +354,15 @@ const insightFeed = computed<InsightItem[]>(() => {
     }
   ]
 })
-const bookmarkedReferences = computed(() =>
-  sourceReferences.value.slice(0, 4).map((reference, index) => ({
-    ...reference,
-    priority: ['Critical path', 'Architecture', 'API boundary', 'Review context'][index] ?? 'Saved reference'
-  }))
-)
+const savedReferenceFiles = computed(() => savedReferences.value.map((reference) => reference.file))
+const bookmarkedReferences = computed<SavedReference[]>(() => {
+  const suggestedReferences = sourceReferences.value
+    .filter((reference) => !savedReferenceFiles.value.includes(reference.file))
+    .slice(0, Math.max(0, 4 - savedReferences.value.length))
+    .map((reference, index) => createSavedReference(reference, SAVED_REFERENCE_PRIORITIES[index] ?? 'Watch'))
+
+  return [...savedReferences.value, ...suggestedReferences]
+})
 const reportRows = computed(() => [
   {
     name: 'Architecture brief',
@@ -406,7 +414,7 @@ const workspaceSetupSteps = computed<WorkspaceSetupStep[]>(() => [
   }
 ])
 const aiFollowUpPrompts = computed(() => {
-  const primaryReference = aiContextReferences.value[0] ?? sourceReferences.value[0]
+  const primaryReference = savedReferences.value[0] ?? aiContextReferences.value[0] ?? sourceReferences.value[0]
   const riskyReference = sourceReferences.value.find((reference) => /auth|token|secret|payment|security|api/i.test(`${reference.file} ${reference.description}`)) ?? primaryReference
   const primaryNode = architectureNodes.value[0]
   const riskPrompt = riskSignals.value[0]
@@ -425,6 +433,9 @@ const reportMarkdown = computed(() => {
   const summary = summaryItems.value.map((item) => `- **${item.label}:** ${item.text}`).join('\n')
   const risks = riskSignals.value.length ? riskSignals.value.map((risk) => `- ${risk}`).join('\n') : '- No blocking risk signals detected.'
   const sources = sourceReferences.value.slice(0, 10).map((reference) => `- \`${reference.file}\` (${reference.service}): ${reference.description}`).join('\n')
+  const saved = savedReferences.value.length
+    ? savedReferences.value.map((reference) => `- \`${reference.file}\` (${reference.priority}): ${reference.note || reference.description}`).join('\n')
+    : '- No saved references yet.'
   const nodes = architectureNodes.value.map((node) => `- ${node.label} (${node.kind}): ${node.detail}`).join('\n')
   const sessions = aiSessionHistory.value.length
     ? aiSessionHistory.value.map((item) => `- **${item.question}** (${item.mode}, ${item.confidence}%): ${item.references.slice(0, 3).map((reference) => `\`${reference.file}\``).join(', ') || 'No source references'}`).join('\n')
@@ -464,6 +475,10 @@ ${nodes}
 ## Source References
 
 ${sources}
+
+## Saved References
+
+${saved}
 
 ## Risk Signals
 
@@ -540,6 +555,7 @@ const settingsRows = computed(() => [
   { label: 'PR source', value: activePullRequestReview.value.repositoryFullName },
   { label: 'AI provider', value: isDemoMode.value ? 'Demo fallback' : 'Google Gemini' },
   { label: 'AI sessions', value: aiSessionHistory.value.length.toString() },
+  { label: 'Saved references', value: savedReferences.value.length.toString() },
   { label: 'Saved workspaces', value: savedWorkspaces.value.length.toString() },
   { label: 'Last export', value: lastReportExportedAt.value }
 ])
@@ -791,6 +807,7 @@ const buildWorkspaceSnapshot = (): StoredWorkspace => ({
   lastSavedAt: formatRecentAnalysisTime(new Date()),
   lastReportExportedAt: lastReportExportedAt.value,
   aiSessionHistory: aiSessionHistory.value.slice(0, 10),
+  savedReferences: savedReferences.value.slice(0, 12),
   analysis: analysis.value,
   prReview: prReview.value,
   recentAnalyses: recentAnalyses.value.slice(0, 6),
@@ -810,6 +827,7 @@ const applyWorkspaceSnapshot = (snapshot: StoredWorkspace) => {
   lastWorkspaceSavedAt.value = snapshot.lastSavedAt
   lastReportExportedAt.value = snapshot.lastReportExportedAt || 'Not exported yet'
   aiSessionHistory.value = snapshot.aiSessionHistory?.filter(isAiSessionItem).slice(0, 10) ?? []
+  savedReferences.value = snapshot.savedReferences?.filter(isSavedReference).slice(0, 12) ?? []
   analysis.value = snapshot.analysis
   prReview.value = snapshot.prReview
   recentAnalyses.value = snapshot.recentAnalyses.filter(isRecentAnalysis).slice(0, 6)
@@ -989,6 +1007,7 @@ const exportCurrentReport = (format: 'markdown' | 'json' = 'markdown') => {
           },
           architectureNodes: architectureNodes.value,
           sourceReferences: sourceReferences.value,
+          savedReferences: savedReferences.value,
           riskSignals: riskSignals.value,
           pullRequestReview: activePullRequestReview.value,
           answer: answer.value,
@@ -1030,6 +1049,7 @@ const clearWorkspace = () => {
   analysis.value = null
   prReview.value = null
   aiSessionHistory.value = []
+  savedReferences.value = []
   lastQuestion.value = ''
   lastMatchedReferences.value = []
   lastAiConfidence.value = 82
@@ -1047,6 +1067,88 @@ const clearWorkspace = () => {
   }
 
   notifyWorkspace('Workspace cleared', 'Local active analysis was reset. Saved archive remains available.', 'info')
+}
+
+function createSavedReference(reference: SourceReference, priority: SavedReferencePriority = 'Watch'): SavedReference {
+  return {
+    ...reference,
+    priority,
+    note: reference.description,
+    savedAt: formatRecentAnalysisTime(new Date())
+  }
+}
+
+const saveSourceReference = (reference: SourceReference) => {
+  const existing = savedReferences.value.find((savedReference) => savedReference.file === reference.file)
+
+  if (existing) {
+    notifyWorkspace('Reference already saved', `${reference.file} is in Bookmarks.`, 'info')
+    changeSection('bookmarks')
+
+    return
+  }
+
+  const priority = savedReferences.value.length < SAVED_REFERENCE_PRIORITIES.length
+    ? SAVED_REFERENCE_PRIORITIES[savedReferences.value.length]
+    : 'Watch'
+
+  savedReferences.value = [
+    createSavedReference(reference, priority),
+    ...savedReferences.value
+  ].slice(0, 12)
+  notifyWorkspace('Reference saved', `${reference.file} added to Bookmarks.`, 'success')
+  persistWorkspaceState()
+}
+
+const removeSavedReference = (file: string) => {
+  savedReferences.value = savedReferences.value.filter((reference) => reference.file !== file)
+  notifyWorkspace('Reference removed', `${file} removed from Bookmarks.`, 'info')
+  persistWorkspaceState()
+}
+
+const updateSavedReferencePriority = (file: string, priority: string) => {
+  if (!SAVED_REFERENCE_PRIORITIES.includes(priority as SavedReferencePriority)) {
+    return
+  }
+
+  savedReferences.value = savedReferences.value.map((reference) =>
+    reference.file === file ? { ...reference, priority: priority as SavedReferencePriority } : reference
+  )
+  persistWorkspaceState()
+}
+
+const updateSavedReferenceNote = (file: string, note: string) => {
+  savedReferences.value = savedReferences.value.map((reference) =>
+    reference.file === file ? { ...reference, note } : reference
+  )
+  persistWorkspaceState()
+}
+
+const handleSavedReferencePriorityInput = (file: string, event: Event) => {
+  const target = event.target as HTMLSelectElement | null
+
+  if (target) {
+    updateSavedReferencePriority(file, target.value)
+  }
+}
+
+const handleSavedReferenceNoteInput = (file: string, event: Event) => {
+  const target = event.target as HTMLTextAreaElement | null
+
+  if (target) {
+    updateSavedReferenceNote(file, target.value)
+  }
+}
+
+const askAboutSourceReference = async (reference: SourceReference) => {
+  question.value = `Explain ${reference.file}: purpose, dependencies, risks, and tests.`
+  lastQuestion.value = question.value
+  lastMatchedReferences.value = findRelevantReferences(`${reference.file} ${reference.service} ${reference.description}`, sourceReferences.value)
+  lastAiConfidence.value = Math.max(58, Math.min(92, 62 + lastMatchedReferences.value.length * 8 - riskSignals.value.length * 2))
+  changeSection('ask')
+  notifyWorkspace('Reference question prepared', `${reference.file} is ready in the AI workspace.`, 'info')
+  await nextTick()
+  document.getElementById('codeatlas-question')?.focus()
 }
 
 const recordAiSessionItem = (item: Omit<AiSessionItem, 'id' | 'askedAt'>) => {
@@ -1146,6 +1248,7 @@ const analyzeRepository = async () => {
     prReview.value = null
     if (result.repository.fullName !== previousRepository) {
       aiSessionHistory.value = []
+      savedReferences.value = []
       lastQuestion.value = ''
       lastMatchedReferences.value = []
       lastAiConfidence.value = 82
@@ -1443,6 +1546,27 @@ function isAiSessionItem(value: unknown): value is AiSessionItem {
   )
 }
 
+function isSavedReference(value: unknown): value is SavedReference {
+  if (typeof value !== 'object' || !value) {
+    return false
+  }
+
+  const item = value as Partial<SavedReference>
+
+  return (
+    typeof item.file === 'string' &&
+    typeof item.type === 'string' &&
+    typeof item.service === 'string' &&
+    typeof item.description === 'string' &&
+    typeof item.loc === 'number' &&
+    typeof item.updated === 'string' &&
+    typeof item.note === 'string' &&
+    typeof item.savedAt === 'string' &&
+    typeof item.priority === 'string' &&
+    SAVED_REFERENCE_PRIORITIES.includes(item.priority as SavedReferencePriority)
+  )
+}
+
 function isStoredWorkspace(value: unknown): value is StoredWorkspace {
   if (typeof value !== 'object' || !value) {
     return false
@@ -1644,7 +1768,12 @@ onBeforeUnmount(() => {
             </section>
 
             <section class="grid grid-cols-1 gap-4">
-              <SourceReferences :references="sourceReferences" />
+              <SourceReferences
+                :references="sourceReferences"
+                :saved-files="savedReferenceFiles"
+                @save="saveSourceReference"
+                @ask="askAboutSourceReference"
+              />
             </section>
           </section>
 
@@ -1666,7 +1795,12 @@ onBeforeUnmount(() => {
                 :question="lastQuestion"
               />
             </section>
-            <SourceReferences :references="sourceReferences" />
+            <SourceReferences
+              :references="sourceReferences"
+              :saved-files="savedReferenceFiles"
+              @save="saveSourceReference"
+              @ask="askAboutSourceReference"
+            />
           </section>
 
           <section v-else-if="activeSection === 'ask'" class="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(340px,520px)]">
@@ -1719,7 +1853,12 @@ onBeforeUnmount(() => {
                 :confidence="aiConfidence"
                 :question="lastQuestion"
               />
-              <SourceReferences :references="sourceReferences" />
+              <SourceReferences
+                :references="sourceReferences"
+                :saved-files="savedReferenceFiles"
+                @save="saveSourceReference"
+                @ask="askAboutSourceReference"
+              />
             </section>
           </section>
 
@@ -1781,9 +1920,12 @@ onBeforeUnmount(() => {
 
           <section v-else-if="activeSection === 'bookmarks'" class="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(320px,420px)]">
             <section class="atlas-panel overflow-hidden">
-              <div class="flex items-center justify-between border-b border-atlas-line px-4 py-3">
-                <h3 class="ui-title text-base">Saved references</h3>
-                <span class="ui-span rounded-full bg-atlas-canvas px-2 py-0.5 text-xs font-semibold text-atlas-muted">{{ bookmarkedReferences.length }}</span>
+              <div class="flex flex-col gap-3 border-b border-atlas-line px-4 py-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <h3 class="ui-title text-base">Saved references</h3>
+                  <p class="mt-1 text-xs leading-5 text-atlas-muted">Pin files, write review notes, and open source-grounded AI questions from one place.</p>
+                </div>
+                <span class="ui-span w-fit rounded-full bg-atlas-canvas px-2 py-0.5 text-xs font-semibold text-atlas-muted">{{ bookmarkedReferences.length }}</span>
               </div>
               <div class="divide-y divide-atlas-line">
                 <article v-for="reference in bookmarkedReferences" :key="reference.file" class="px-4 py-4">
@@ -1792,12 +1934,56 @@ onBeforeUnmount(() => {
                       <p class="truncate text-sm font-semibold text-atlas-ink">{{ reference.file }}</p>
                       <p class="mt-1 text-sm leading-5 text-atlas-muted">{{ reference.description }}</p>
                     </div>
-                    <span class="ui-span rounded bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700">{{ reference.priority }}</span>
+                    <select
+                      class="atlas-control h-8 w-full text-xs sm:w-40"
+                      :value="reference.priority"
+                      :disabled="!savedReferenceFiles.includes(reference.file)"
+                      @change="handleSavedReferencePriorityInput(reference.file, $event)"
+                    >
+                      <option v-for="priority in SAVED_REFERENCE_PRIORITIES" :key="priority" :value="priority">
+                        {{ priority }}
+                      </option>
+                    </select>
                   </div>
                   <div class="mt-3 flex flex-wrap gap-2 text-xs text-atlas-muted">
                     <span class="ui-span rounded border border-atlas-border bg-white px-2 py-1">{{ reference.service }}</span>
                     <span class="ui-span rounded border border-atlas-border bg-white px-2 py-1">{{ reference.type }}</span>
                     <span class="ui-span rounded border border-atlas-border bg-white px-2 py-1">{{ reference.loc }} LOC</span>
+                    <span class="ui-span rounded border border-atlas-border bg-white px-2 py-1">
+                      {{ savedReferenceFiles.includes(reference.file) ? `Saved ${reference.savedAt}` : 'Suggested' }}
+                    </span>
+                  </div>
+                  <textarea
+                    class="atlas-control mt-3 min-h-20 w-full py-2 leading-5 disabled:bg-atlas-canvas disabled:text-atlas-muted"
+                    :value="reference.note"
+                    :disabled="!savedReferenceFiles.includes(reference.file)"
+                    placeholder="Add why this file matters..."
+                    @input="handleSavedReferenceNoteInput(reference.file, $event)"
+                  ></textarea>
+                  <div class="mt-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      class="ui-button h-9 border-atlas-border bg-white px-3 text-xs text-atlas-ink hover:border-atlas-accent hover:text-atlas-accent"
+                      @click="askAboutSourceReference(reference)"
+                    >
+                      <span class="ui-span">Ask about file</span>
+                    </button>
+                    <button
+                      v-if="savedReferenceFiles.includes(reference.file)"
+                      type="button"
+                      class="ui-button h-9 border-atlas-border bg-white px-3 text-xs text-atlas-muted hover:border-atlas-danger hover:text-atlas-danger"
+                      @click="removeSavedReference(reference.file)"
+                    >
+                      <span class="ui-span">Remove</span>
+                    </button>
+                    <button
+                      v-else
+                      type="button"
+                      class="ui-button h-9 border-atlas-accent bg-atlas-accent px-3 text-xs text-white hover:bg-atlas-accentDark"
+                      @click="saveSourceReference(reference)"
+                    >
+                      <span class="ui-span">Save to workspace</span>
+                    </button>
                   </div>
                 </article>
               </div>

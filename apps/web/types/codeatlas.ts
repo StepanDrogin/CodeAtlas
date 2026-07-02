@@ -99,3 +99,11 @@ export interface AiSessionItem {
   askedAt: string
   mode: 'gemini' | 'fallback' | 'demo'
 }
+
+export type SavedReferencePriority = 'Critical path' | 'Architecture' | 'API boundary' | 'Review context' | 'Watch'
+
+export interface SavedReference extends SourceReference {
+  priority: SavedReferencePriority
+  note: string
+  savedAt: string
+}

@@ -1,14 +1,23 @@
 <script setup lang="ts">
 import type { SourceReference } from '~/types/codeatlas'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   references: SourceReference[]
+  savedFiles?: string[]
+}>(), {
+  savedFiles: () => []
+})
+
+defineEmits<{
+  save: [reference: SourceReference]
+  ask: [reference: SourceReference]
 }>()
 
 const search = ref('')
 const activeType = ref('All')
 
 const filterTypes = computed(() => ['All', ...Array.from(new Set(props.references.map((reference) => reference.type)))])
+const savedFileSet = computed(() => new Set(props.savedFiles))
 
 const filteredReferences = computed(() => {
   const query = search.value.trim().toLowerCase()
@@ -60,6 +69,7 @@ const showAllFiles = () => {
             <th class="border-b border-atlas-line px-2 py-2 font-medium">Description</th>
             <th class="border-b border-atlas-line px-2 py-2 font-medium">LOC</th>
             <th class="border-b border-atlas-line px-2 py-2 font-medium">Updated</th>
+            <th class="border-b border-atlas-line px-4 py-2 text-right font-medium">Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -72,9 +82,28 @@ const showAllFiles = () => {
             <td class="px-2 py-2 text-atlas-muted">{{ reference.description }}</td>
             <td class="px-2 py-2 text-atlas-muted">{{ reference.loc }}</td>
             <td class="px-2 py-2 text-atlas-muted">{{ reference.updated }}</td>
+            <td class="px-4 py-2">
+              <div class="flex justify-end gap-2">
+                <button
+                  type="button"
+                  class="ui-button h-8 border-atlas-border bg-white px-2 text-xs text-atlas-muted hover:border-atlas-accent hover:text-atlas-accent"
+                  :class="savedFileSet.has(reference.file) ? 'border-atlas-accent bg-atlas-rail text-atlas-accent' : ''"
+                  @click="$emit('save', reference)"
+                >
+                  <span class="ui-span">{{ savedFileSet.has(reference.file) ? 'Saved' : 'Save' }}</span>
+                </button>
+                <button
+                  type="button"
+                  class="ui-button h-8 border-atlas-border bg-white px-2 text-xs text-atlas-muted hover:border-atlas-ink hover:text-atlas-ink"
+                  @click="$emit('ask', reference)"
+                >
+                  <span class="ui-span">Ask</span>
+                </button>
+              </div>
+            </td>
           </tr>
           <tr v-if="!filteredReferences.length">
-            <td colspan="6" class="px-4 py-8 text-center text-sm text-atlas-muted">
+            <td colspan="7" class="px-4 py-8 text-center text-sm text-atlas-muted">
               No source references match this filter.
             </td>
           </tr>
