@@ -21,6 +21,11 @@ interface WorkspaceActivity {
   tone: 'info' | 'success' | 'warning' | 'danger'
 }
 
+interface ActivityLogItem extends WorkspaceActivity {
+  id: number
+  timestamp: string
+}
+
 const CLIENT_REQUEST_TIMEOUT_MS = 25000
 const CANONICAL_URL = 'https://code-atlas-web-kappa.vercel.app/'
 
@@ -40,6 +45,8 @@ const analysis = ref<RepositoryAnalysis | null>(null)
 const prReview = ref<PullRequestReview | null>(null)
 const recentAction = ref<WorkspaceActivity | null>(null)
 const recentActionTimeout = ref<ReturnType<typeof setTimeout> | null>(null)
+const activityLog = ref<ActivityLogItem[]>([])
+let activityLogId = 0
 const answer = ref(
   'This repository is a TypeScript-first SaaS monorepo with a Nuxt dashboard, Fastify API boundary, background workers, and shared packages for GitHub, AI prompts, and repository analysis.'
 )
@@ -326,6 +333,16 @@ watchEffect(() => {
 
 const notifyWorkspace = (label: string, detail: string, tone: WorkspaceActivity['tone'] = 'info') => {
   recentAction.value = { label, detail, tone }
+  activityLog.value = [
+    {
+      id: ++activityLogId,
+      label,
+      detail,
+      tone,
+      timestamp: formatActivityTime(new Date())
+    },
+    ...activityLog.value
+  ].slice(0, 8)
 
   if (recentActionTimeout.value) {
     clearTimeout(recentActionTimeout.value)
@@ -345,6 +362,25 @@ const changeSection = (section: NavSection) => {
 
 const handleUtilityAction = (label: string, detail: string) => {
   notifyWorkspace(label, detail, 'info')
+}
+
+const focusRepositoryInput = async () => {
+  await nextTick()
+
+  if (!import.meta.client) {
+    return
+  }
+
+  const input = document.getElementById('repo-url') as HTMLInputElement | null
+  input?.focus()
+  input?.select()
+}
+
+const startNewAnalysis = async () => {
+  activeSection.value = 'repository'
+  analysisError.value = ''
+  notifyWorkspace('New analysis ready', 'Repository field selected. Paste a GitHub URL and run analysis.', 'info')
+  await focusRepositoryInput()
 }
 
 const toggleWorkspaceSetting = (key: WorkspaceSettingKey) => {
@@ -595,6 +631,13 @@ function formatLoc(loc: number) {
   return loc.toString()
 }
 
+function formatActivityTime(date: Date) {
+  return date.toLocaleTimeString('en-US', {
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
+
 function isAbortError(error: unknown) {
   if (typeof error !== 'object' || !error) {
     return false
@@ -669,11 +712,15 @@ onBeforeUnmount(() => {
       <div class="min-w-0 flex-1">
         <CommandBar
           v-model:question="question"
+          :activity-log="activityLog"
+          :active-section-label="currentSection.label"
           :is-asking="isAsking"
+          :is-demo-mode="isDemoMode"
+          :repository-name="repositoryName"
           @ask="askCodeAtlas"
-          @new-analysis="changeSection('repository')"
-          @show-shortcuts="handleUtilityAction('Shortcut hint', 'Use the command input to ask CodeAtlas from any section.')"
-          @show-notifications="handleUtilityAction('No new notifications', 'The workspace is clear right now.')"
+          @focus-command="handleUtilityAction('Command focused', 'Type a question and press Enter to ask CodeAtlas.')"
+          @new-analysis="startNewAnalysis"
+          @open-section="changeSection"
         />
 
         <main class="mx-auto flex max-w-[1540px] flex-col gap-4 px-4 py-5 md:px-6">

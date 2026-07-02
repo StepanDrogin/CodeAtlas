@@ -79,6 +79,8 @@ textarea {
 
 .atlas-section-enter-active,
 .atlas-section-leave-active,
+.atlas-popover-enter-active,
+.atlas-popover-leave-active,
 .atlas-toast-enter-active,
 .atlas-toast-leave-active {
   transition: opacity 180ms ease, transform 180ms ease;
@@ -94,6 +96,12 @@ textarea {
 .atlas-toast-leave-to {
   opacity: 0;
   transform: translateY(10px);
+}
+
+.atlas-popover-enter-from,
+.atlas-popover-leave-to {
+  opacity: 0;
+  transform: translateY(-6px) scale(0.98);
 }
 
 @media (prefers-reduced-motion: reduce) {
