@@ -89,3 +89,13 @@ export interface WorkspaceSetupStep {
   status: 'done' | 'active' | 'pending'
   action: string
 }
+
+export interface AiSessionItem {
+  id: string
+  question: string
+  answer: string
+  confidence: number
+  references: SourceReference[]
+  askedAt: string
+  mode: 'gemini' | 'fallback' | 'demo'
+}

@@ -10,6 +10,7 @@ import {
   summaryItems as demoSummaryItems
 } from '~/data/demo'
 import type {
+  AiSessionItem,
   AnalysisStep,
   HealthSegment,
   InsightItem,
@@ -51,6 +52,7 @@ interface StoredWorkspace {
   lastAiConfidence: number
   lastSavedAt: string
   lastReportExportedAt: string
+  aiSessionHistory: AiSessionItem[]
   analysis: RepositoryAnalysis | null
   prReview: PullRequestReview | null
   recentAnalyses: RecentAnalysis[]
@@ -110,6 +112,7 @@ const recentActionTimeout = ref<ReturnType<typeof setTimeout> | null>(null)
 const activityLog = ref<ActivityLogItem[]>([])
 const recentAnalyses = ref<RecentAnalysis[]>([])
 const savedWorkspaces = ref<StoredWorkspace[]>([])
+const aiSessionHistory = ref<AiSessionItem[]>([])
 const lastQuestion = ref('')
 const lastMatchedReferences = ref<SourceReference[]>([])
 const lastAiConfidence = ref(82)
@@ -390,8 +393,8 @@ const workspaceSetupSteps = computed<WorkspaceSetupStep[]>(() => [
   {
     id: 'ask',
     label: 'Ask with sources',
-    detail: lastQuestion.value ? `${aiContextReferences.value.length} files grounded the latest answer.` : 'Ask Gemini or local fallback a repository question with cited files.',
-    status: lastQuestion.value ? 'done' : analysis.value ? 'active' : 'pending',
+    detail: aiSessionHistory.value.length ? `${aiSessionHistory.value.length} AI session questions are saved.` : 'Ask Gemini or local fallback a repository question with cited files.',
+    status: aiSessionHistory.value.length ? 'done' : analysis.value ? 'active' : 'pending',
     action: 'Open AI workspace'
   },
   {
@@ -402,12 +405,30 @@ const workspaceSetupSteps = computed<WorkspaceSetupStep[]>(() => [
     action: 'Export package'
   }
 ])
+const aiFollowUpPrompts = computed(() => {
+  const primaryReference = aiContextReferences.value[0] ?? sourceReferences.value[0]
+  const riskyReference = sourceReferences.value.find((reference) => /auth|token|secret|payment|security|api/i.test(`${reference.file} ${reference.description}`)) ?? primaryReference
+  const primaryNode = architectureNodes.value[0]
+  const riskPrompt = riskSignals.value[0]
+    ? `Turn this risk into a mitigation plan: ${riskSignals.value[0]}`
+    : `What hidden risks should I check before changing ${primaryReference?.service ?? repositoryName.value}?`
+
+  return [
+    primaryReference ? `Which tests should protect ${primaryReference.file}?` : `What should I inspect first in ${repositoryName.value}?`,
+    primaryNode ? `Explain ${primaryNode.label} dependencies and failure modes.` : `Map the main architecture risks in ${repositoryName.value}.`,
+    riskPrompt,
+    riskyReference ? `What can break if I change ${riskyReference.file}?` : `Prepare a refactor plan for the highest-risk module.`
+  ].filter((prompt, index, prompts) => prompts.indexOf(prompt) === index).slice(0, 4)
+})
 const reportMarkdown = computed(() => {
   const repository = analysis.value?.repository
   const summary = summaryItems.value.map((item) => `- **${item.label}:** ${item.text}`).join('\n')
   const risks = riskSignals.value.length ? riskSignals.value.map((risk) => `- ${risk}`).join('\n') : '- No blocking risk signals detected.'
   const sources = sourceReferences.value.slice(0, 10).map((reference) => `- \`${reference.file}\` (${reference.service}): ${reference.description}`).join('\n')
   const nodes = architectureNodes.value.map((node) => `- ${node.label} (${node.kind}): ${node.detail}`).join('\n')
+  const sessions = aiSessionHistory.value.length
+    ? aiSessionHistory.value.map((item) => `- **${item.question}** (${item.mode}, ${item.confidence}%): ${item.references.slice(0, 3).map((reference) => `\`${reference.file}\``).join(', ') || 'No source references'}`).join('\n')
+    : '- No AI session questions saved yet.'
   const pr = activePullRequestReview.value
 
   return `# CodeAtlas Report: ${repositoryName.value}
@@ -427,6 +448,10 @@ Health: ${repositoryHealthScore.value}/100 (${repositoryHealthLabel.value})
 ## AI Summary
 
 ${answer.value}
+
+## AI Session Log
+
+${sessions}
 
 ## Summary Items
 
@@ -514,6 +539,7 @@ const settingsRows = computed(() => [
   { label: 'Repository', value: repositoryName.value },
   { label: 'PR source', value: activePullRequestReview.value.repositoryFullName },
   { label: 'AI provider', value: isDemoMode.value ? 'Demo fallback' : 'Google Gemini' },
+  { label: 'AI sessions', value: aiSessionHistory.value.length.toString() },
   { label: 'Saved workspaces', value: savedWorkspaces.value.length.toString() },
   { label: 'Last export', value: lastReportExportedAt.value }
 ])
@@ -764,6 +790,7 @@ const buildWorkspaceSnapshot = (): StoredWorkspace => ({
   lastAiConfidence: lastAiConfidence.value,
   lastSavedAt: formatRecentAnalysisTime(new Date()),
   lastReportExportedAt: lastReportExportedAt.value,
+  aiSessionHistory: aiSessionHistory.value.slice(0, 10),
   analysis: analysis.value,
   prReview: prReview.value,
   recentAnalyses: recentAnalyses.value.slice(0, 6),
@@ -778,9 +805,11 @@ const applyWorkspaceSnapshot = (snapshot: StoredWorkspace) => {
   lastAnalyzedAt.value = snapshot.lastAnalyzedAt
   answer.value = snapshot.answer
   lastQuestion.value = snapshot.lastQuestion
+  question.value = snapshot.lastQuestion
   lastAiConfidence.value = snapshot.lastAiConfidence || 82
   lastWorkspaceSavedAt.value = snapshot.lastSavedAt
   lastReportExportedAt.value = snapshot.lastReportExportedAt || 'Not exported yet'
+  aiSessionHistory.value = snapshot.aiSessionHistory?.filter(isAiSessionItem).slice(0, 10) ?? []
   analysis.value = snapshot.analysis
   prReview.value = snapshot.prReview
   recentAnalyses.value = snapshot.recentAnalyses.filter(isRecentAnalysis).slice(0, 6)
@@ -964,6 +993,7 @@ const exportCurrentReport = (format: 'markdown' | 'json' = 'markdown') => {
           pullRequestReview: activePullRequestReview.value,
           answer: answer.value,
           lastQuestion: lastQuestion.value,
+          aiSessionHistory: aiSessionHistory.value,
           generatedAt: new Date().toISOString()
         },
         null,
@@ -999,6 +1029,7 @@ const copyCurrentReport = async () => {
 const clearWorkspace = () => {
   analysis.value = null
   prReview.value = null
+  aiSessionHistory.value = []
   lastQuestion.value = ''
   lastMatchedReferences.value = []
   lastAiConfidence.value = 82
@@ -1016,6 +1047,44 @@ const clearWorkspace = () => {
   }
 
   notifyWorkspace('Workspace cleared', 'Local active analysis was reset. Saved archive remains available.', 'info')
+}
+
+const recordAiSessionItem = (item: Omit<AiSessionItem, 'id' | 'askedAt'>) => {
+  const entry: AiSessionItem = {
+    ...item,
+    id: `${Date.now()}-${item.mode}`,
+    askedAt: formatRecentAnalysisTime(new Date()),
+    references: item.references.slice(0, 6)
+  }
+
+  aiSessionHistory.value = [
+    entry,
+    ...aiSessionHistory.value.filter((historyItem) => historyItem.question !== entry.question)
+  ].slice(0, 10)
+}
+
+const selectAiSessionItem = (item: AiSessionItem) => {
+  question.value = item.question
+  lastQuestion.value = item.question
+  answer.value = item.answer
+  lastMatchedReferences.value = item.references
+  lastAiConfidence.value = item.confidence
+  changeSection('ask')
+  notifyWorkspace('AI answer restored', `${item.references.length} source references loaded from session history.`, 'info')
+  persistWorkspaceState()
+}
+
+const askSuggestedQuestion = async (prompt: string) => {
+  question.value = prompt
+  changeSection('ask')
+  await nextTick()
+  await askCodeAtlas()
+}
+
+const clearAiSessionHistory = () => {
+  aiSessionHistory.value = []
+  notifyWorkspace('AI session cleared', 'Question history was removed from this workspace.', 'info')
+  persistWorkspaceState()
 }
 
 const askAboutArchitectureNode = async (node: { label: string; detail: string }) => {
@@ -1056,6 +1125,7 @@ const analyzeRepository = async () => {
   lastAnalyzedAt.value = 'Analysis started now'
   startAnalysisProgress()
   let succeeded = false
+  const previousRepository = repositoryName.value
 
   try {
     const result = isDemoMode.value
@@ -1074,6 +1144,13 @@ const analyzeRepository = async () => {
     repoUrl.value = `github.com/${result.repository.fullName}`
     prUrl.value = result.pullRequests[0]?.url ?? prUrl.value
     prReview.value = null
+    if (result.repository.fullName !== previousRepository) {
+      aiSessionHistory.value = []
+      lastQuestion.value = ''
+      lastMatchedReferences.value = []
+      lastAiConfidence.value = 82
+      aiQuestionError.value = ''
+    }
     answer.value = result.answer
     lastAnalyzedAt.value = `Completed just now - ${result.repository.fileCount.toLocaleString('en-US')} files - ${formatLoc(result.repository.estimatedLoc)} LOC`
     recordRecentAnalysis()
@@ -1205,6 +1282,13 @@ const askCodeAtlas = async () => {
     answer.value = fallbackAnswer
     aiQuestionError.value = ''
     lastAiConfidence.value = Math.max(54, Math.min(94, 58 + matches.length * 9 - riskSignals.value.length * 3))
+    recordAiSessionItem({
+      question: normalizedQuestion,
+      answer: answer.value,
+      confidence: lastAiConfidence.value,
+      references: lastMatchedReferences.value,
+      mode: 'demo'
+    })
     notifyWorkspace('Local answer ready', 'Demo-mode source references were matched.', 'success')
     persistWorkspaceState()
 
@@ -1232,12 +1316,26 @@ const askCodeAtlas = async () => {
     answer.value = result.answer || fallbackAnswer
     lastMatchedReferences.value = Array.isArray(result.references) && result.references.length ? result.references : matches
     lastAiConfidence.value = typeof result.confidence === 'number' ? result.confidence : aiConfidence.value
+    recordAiSessionItem({
+      question: normalizedQuestion,
+      answer: answer.value,
+      confidence: lastAiConfidence.value,
+      references: lastMatchedReferences.value,
+      mode: 'gemini'
+    })
     notifyWorkspace('Gemini answer ready', 'The answer is grounded in current source references.', 'success')
     persistWorkspaceState()
   } catch (error) {
     aiQuestionError.value = getErrorMessage(error)
     answer.value = fallbackAnswer
     lastAiConfidence.value = Math.max(54, Math.min(88, 54 + matches.length * 8 - riskSignals.value.length * 3))
+    recordAiSessionItem({
+      question: normalizedQuestion,
+      answer: answer.value,
+      confidence: lastAiConfidence.value,
+      references: lastMatchedReferences.value,
+      mode: 'fallback'
+    })
     notifyWorkspace('Gemini fallback shown', aiQuestionError.value, 'warning')
     persistWorkspaceState()
   } finally {
@@ -1324,6 +1422,24 @@ function isRecentAnalysis(value: unknown): value is RecentAnalysis {
     typeof item.healthLabel === 'string' &&
     typeof item.analyzedAt === 'string' &&
     typeof item.meta === 'string'
+  )
+}
+
+function isAiSessionItem(value: unknown): value is AiSessionItem {
+  if (typeof value !== 'object' || !value) {
+    return false
+  }
+
+  const item = value as Partial<AiSessionItem>
+
+  return (
+    typeof item.id === 'string' &&
+    typeof item.question === 'string' &&
+    typeof item.answer === 'string' &&
+    typeof item.confidence === 'number' &&
+    Array.isArray(item.references) &&
+    typeof item.askedAt === 'string' &&
+    (item.mode === 'gemini' || item.mode === 'fallback' || item.mode === 'demo')
   )
 }
 
@@ -1554,34 +1670,45 @@ onBeforeUnmount(() => {
           </section>
 
           <section v-else-if="activeSection === 'ask'" class="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(340px,520px)]">
-            <section class="atlas-panel overflow-hidden">
-              <div class="border-b border-atlas-line px-4 py-3">
-                <h3 class="ui-title text-base">Question workspace</h3>
-              </div>
-              <form class="flex flex-col gap-3 px-4 py-4 md:flex-row" :aria-busy="isAsking" @submit.prevent="askCodeAtlas">
-                <label class="sr-only" for="codeatlas-question">Ask CodeAtlas</label>
-                <input
-                  id="codeatlas-question"
-                  v-model="question"
-                  class="atlas-control min-w-0 flex-1"
-                  type="search"
-                  placeholder="Where is billing handled?"
-                >
-                <button
-                  type="submit"
-                  class="ui-button h-10 bg-atlas-ink px-4 text-white hover:bg-atlas-accent"
-                  :disabled="isAsking"
-                >
-                  <span v-if="isAsking" class="ui-span h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white"></span>
-                  <span class="ui-span">{{ isAsking ? 'Asking...' : 'Ask Gemini' }}</span>
-                </button>
-              </form>
-              <div v-if="aiQuestionError" class="mx-4 mb-4 rounded-atlas border border-amber-100 bg-amber-50 px-3 py-2 text-sm leading-5 text-amber-800">
-                Gemini did not answer in time, so CodeAtlas showed the local source-reference fallback. {{ aiQuestionError }}
-              </div>
-              <div class="border-t border-atlas-line px-4 py-4">
-                <p class="text-sm leading-6 text-atlas-ink">{{ answer }}</p>
-              </div>
+            <section class="flex flex-col gap-4">
+              <section class="atlas-panel overflow-hidden">
+                <div class="border-b border-atlas-line px-4 py-3">
+                  <h3 class="ui-title text-base">Question workspace</h3>
+                </div>
+                <form class="flex flex-col gap-3 px-4 py-4 md:flex-row" :aria-busy="isAsking" @submit.prevent="askCodeAtlas">
+                  <label class="sr-only" for="codeatlas-question">Ask CodeAtlas</label>
+                  <input
+                    id="codeatlas-question"
+                    v-model="question"
+                    class="atlas-control min-w-0 flex-1"
+                    type="search"
+                    placeholder="Where is billing handled?"
+                  >
+                  <button
+                    type="submit"
+                    class="ui-button h-10 bg-atlas-ink px-4 text-white hover:bg-atlas-accent"
+                    :disabled="isAsking"
+                  >
+                    <span v-if="isAsking" class="ui-span h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white"></span>
+                    <span class="ui-span">{{ isAsking ? 'Asking...' : 'Ask Gemini' }}</span>
+                  </button>
+                </form>
+                <div v-if="aiQuestionError" class="mx-4 mb-4 rounded-atlas border border-amber-100 bg-amber-50 px-3 py-2 text-sm leading-5 text-amber-800">
+                  Gemini did not answer in time, so CodeAtlas showed the local source-reference fallback. {{ aiQuestionError }}
+                </div>
+                <div class="border-t border-atlas-line px-4 py-4">
+                  <p class="text-sm leading-6 text-atlas-ink">{{ answer }}</p>
+                </div>
+              </section>
+
+              <AiSessionPanel
+                :items="aiSessionHistory"
+                :suggestions="aiFollowUpPrompts"
+                :is-asking="isAsking"
+                @ask="askSuggestedQuestion"
+                @select="selectAiSessionItem"
+                @clear="clearAiSessionHistory"
+              />
             </section>
             <section class="flex flex-col gap-4">
               <AiSummaryPanel
