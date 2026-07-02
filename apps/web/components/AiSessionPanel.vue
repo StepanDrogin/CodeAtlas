@@ -18,15 +18,17 @@ const modeClass: Record<AiSessionItem['mode'], string> = {
   fallback: 'bg-amber-50 text-amber-700',
   demo: 'bg-blue-50 text-blue-700'
 }
+
+const { t } = useCodeAtlasI18n()
 </script>
 
 <template>
   <section class="atlas-panel overflow-hidden">
     <div class="flex flex-col gap-3 border-b border-atlas-line px-4 py-3 md:flex-row md:items-center md:justify-between">
       <div>
-        <h3 class="ui-title text-base">AI session</h3>
+        <h3 class="ui-title text-base">{{ t('session.title') }}</h3>
         <p class="mt-1 text-xs leading-5 text-atlas-muted">
-          Follow-up prompts, answer history, and reusable source-grounded context.
+          {{ t('session.detail') }}
         </p>
       </div>
       <button
@@ -35,12 +37,12 @@ const modeClass: Record<AiSessionItem['mode'], string> = {
         :disabled="!items.length"
         @click="$emit('clear')"
       >
-        <span class="ui-span">Clear history</span>
+        <span class="ui-span">{{ t('session.clear') }}</span>
       </button>
     </div>
 
     <div class="border-b border-atlas-line bg-atlas-canvas/70 px-4 py-4">
-      <p class="atlas-muted-label">Suggested follow-ups</p>
+      <p class="atlas-muted-label">{{ t('session.followUps') }}</p>
       <div class="mt-3 flex flex-wrap gap-2">
         <button
           v-for="suggestion in suggestions"
@@ -89,7 +91,7 @@ const modeClass: Record<AiSessionItem['mode'], string> = {
     </div>
 
     <div v-else class="px-4 py-6 text-sm leading-6 text-atlas-muted">
-      Ask the first question to create a reusable AI session trail for this repository.
+      {{ t('session.empty') }}
     </div>
   </section>
 </template>

@@ -9,6 +9,8 @@ defineProps<{
 defineEmits<{
   'change-section': [section: NavSection]
 }>()
+
+const { t } = useCodeAtlasI18n()
 </script>
 
 <template>
@@ -52,23 +54,23 @@ defineEmits<{
           </span>
           <div class="min-w-0">
             <p class="truncate text-sm font-medium text-atlas-ink">Acme Corp</p>
-            <p class="truncate text-xs text-atlas-muted">Pro Workspace</p>
+            <p class="truncate text-xs text-atlas-muted">{{ t('sidebar.proWorkspace') }}</p>
           </div>
         </div>
         <div class="mt-4">
           <div class="mb-1 flex items-center justify-between text-xs">
-            <span class="ui-span text-atlas-muted">Credits</span>
+            <span class="ui-span text-atlas-muted">{{ t('sidebar.credits') }}</span>
             <span class="ui-span font-semibold text-atlas-accent">7,450 / 10,000</span>
           </div>
           <div class="h-1.5 overflow-hidden rounded-full bg-white shadow-insetLine">
             <div class="h-full w-[74%] rounded-full bg-atlas-accent"></div>
           </div>
-          <p class="mt-2 text-xs text-atlas-subtle">Renews in 12 days</p>
+          <p class="mt-2 text-xs text-atlas-subtle">{{ t('sidebar.renews') }}</p>
         </div>
       </div>
       <button type="button" class="ui-button h-9 w-full justify-start border-atlas-border bg-white px-3 text-atlas-muted hover:text-atlas-ink">
         <span class="ui-span text-base leading-none">&lt;</span>
-        <span class="ui-span">Collapse</span>
+        <span class="ui-span">{{ t('sidebar.collapse') }}</span>
       </button>
     </div>
   </aside>

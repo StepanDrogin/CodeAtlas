@@ -16,6 +16,7 @@ defineEmits<{
 }>()
 
 const activeTab = ref<'prs' | 'signals'>('prs')
+const { t } = useCodeAtlasI18n()
 
 const riskClass: Record<RiskLevel, string> = {
   High: 'bg-red-50 text-atlas-danger',
@@ -39,7 +40,7 @@ const selectPullRequest = (pullRequest: PullRequest) => {
         :class="activeTab === 'prs' ? 'border-atlas-accent text-atlas-accent' : 'border-transparent text-atlas-muted hover:text-atlas-ink'"
         @click="activeTab = 'prs'"
       >
-        <span class="ui-span">PR Review</span>
+        <span class="ui-span">{{ t('pr.review') }}</span>
       </button>
       <button
         type="button"
@@ -47,13 +48,13 @@ const selectPullRequest = (pullRequest: PullRequest) => {
         :class="activeTab === 'signals' ? 'border-atlas-accent text-atlas-accent' : 'border-transparent text-atlas-muted hover:text-atlas-ink'"
         @click="activeTab = 'signals'"
       >
-        <span class="ui-span">Risk signals</span>
+        <span class="ui-span">{{ t('pr.riskSignals') }}</span>
       </button>
     </div>
 
     <div v-if="activeTab === 'prs'" class="p-4">
       <form class="mb-4 flex flex-col gap-2 lg:flex-row" :aria-busy="isReviewing" @submit.prevent="$emit('review')">
-        <label class="sr-only" for="pr-url">GitHub pull request URL</label>
+        <label class="sr-only" for="pr-url">{{ t('pr.urlLabel') }}</label>
         <input
           id="pr-url"
           v-model="reviewUrl"
@@ -70,7 +71,7 @@ const selectPullRequest = (pullRequest: PullRequest) => {
           :aria-busy="isReviewing"
         >
           <span v-if="isReviewing" class="ui-span h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white"></span>
-          <span class="ui-span">{{ isReviewing ? 'Reviewing...' : 'Review PR' }}</span>
+          <span class="ui-span">{{ isReviewing ? t('pr.reviewing') : t('pr.reviewCta') }}</span>
         </button>
       </form>
 
@@ -81,9 +82,9 @@ const selectPullRequest = (pullRequest: PullRequest) => {
       <div class="mb-5 border-b border-atlas-line pb-4">
         <div class="mb-3 flex flex-wrap items-start justify-between gap-3">
           <div class="min-w-0">
-            <p class="text-xs font-medium uppercase text-atlas-muted">Current review</p>
+            <p class="text-xs font-medium uppercase text-atlas-muted">{{ t('pr.currentReview') }}</p>
             <h2 class="ui-title mt-1 line-clamp-2 text-base">{{ review.title }}</h2>
-            <p class="mt-1 text-xs text-atlas-muted">{{ review.repositoryFullName }} {{ review.id }} by {{ review.author }}</p>
+            <p class="mt-1 text-xs text-atlas-muted">{{ t('pr.byAuthor', { repository: review.repositoryFullName, id: review.id, author: review.author }) }}</p>
           </div>
           <span class="ui-span rounded px-2 py-1 text-xs font-semibold" :class="riskClass[review.risk]">{{ review.risk }}</span>
         </div>
@@ -92,15 +93,15 @@ const selectPullRequest = (pullRequest: PullRequest) => {
 
         <div class="mt-3 grid grid-cols-3 gap-2 text-xs">
           <div class="border-l border-atlas-line pl-3">
-            <span class="ui-span block text-atlas-muted">Files</span>
+            <span class="ui-span block text-atlas-muted">{{ t('common.files') }}</span>
             <span class="ui-span font-semibold text-atlas-ink">{{ review.changedFiles }}</span>
           </div>
           <div class="border-l border-atlas-line pl-3">
-            <span class="ui-span block text-atlas-muted">Additions</span>
+            <span class="ui-span block text-atlas-muted">{{ t('common.additions') }}</span>
             <span class="ui-span font-semibold text-atlas-ink">+{{ review.additions }}</span>
           </div>
           <div class="border-l border-atlas-line pl-3">
-            <span class="ui-span block text-atlas-muted">Deletions</span>
+            <span class="ui-span block text-atlas-muted">{{ t('common.deletions') }}</span>
             <span class="ui-span font-semibold text-atlas-ink">-{{ review.deletions }}</span>
           </div>
         </div>
@@ -108,7 +109,7 @@ const selectPullRequest = (pullRequest: PullRequest) => {
 
       <div class="mb-5 grid gap-4 lg:grid-cols-2">
         <div>
-          <h3 class="ui-title mb-2 text-sm">Affected modules</h3>
+          <h3 class="ui-title mb-2 text-sm">{{ t('pr.affectedModules') }}</h3>
           <div class="space-y-2">
             <div v-for="module in review.affectedModules" :key="module.name" class="border-b border-atlas-line pb-2 last:border-0 last:pb-0">
               <div class="flex items-center justify-between gap-3">
@@ -121,7 +122,7 @@ const selectPullRequest = (pullRequest: PullRequest) => {
         </div>
 
         <div>
-          <h3 class="ui-title mb-2 text-sm">Suggested comments</h3>
+          <h3 class="ui-title mb-2 text-sm">{{ t('pr.suggestedComments') }}</h3>
           <div class="space-y-2">
             <div v-for="comment in review.suggestedComments" :key="`${comment.file}-${comment.message}`" class="border-b border-atlas-line pb-2 last:border-0 last:pb-0">
               <div class="flex items-center gap-2">
@@ -137,22 +138,22 @@ const selectPullRequest = (pullRequest: PullRequest) => {
 
       <div class="mb-5 grid gap-3 md:grid-cols-3">
         <div>
-          <h3 class="ui-title mb-2 text-sm">Missing tests</h3>
-          <p v-if="!review.missingTests.length" class="text-xs text-atlas-muted">No missing test signal detected.</p>
+          <h3 class="ui-title mb-2 text-sm">{{ t('pr.missingTests') }}</h3>
+          <p v-if="!review.missingTests.length" class="text-xs text-atlas-muted">{{ t('pr.noMissingTests') }}</p>
           <ul v-else class="space-y-2">
             <li v-for="finding in review.missingTests" :key="finding" class="text-xs leading-5 text-atlas-muted">{{ finding }}</li>
           </ul>
         </div>
         <div>
-          <h3 class="ui-title mb-2 text-sm">Security</h3>
-          <p v-if="!review.securityConcerns.length" class="text-xs text-atlas-muted">No obvious security signal detected.</p>
+          <h3 class="ui-title mb-2 text-sm">{{ t('pr.security') }}</h3>
+          <p v-if="!review.securityConcerns.length" class="text-xs text-atlas-muted">{{ t('pr.noSecurity') }}</p>
           <ul v-else class="space-y-2">
             <li v-for="finding in review.securityConcerns" :key="finding" class="text-xs leading-5 text-atlas-muted">{{ finding }}</li>
           </ul>
         </div>
         <div>
-          <h3 class="ui-title mb-2 text-sm">Breaking changes</h3>
-          <p v-if="!review.breakingChanges.length" class="text-xs text-atlas-muted">No breaking-change signal detected.</p>
+          <h3 class="ui-title mb-2 text-sm">{{ t('pr.breakingChanges') }}</h3>
+          <p v-if="!review.breakingChanges.length" class="text-xs text-atlas-muted">{{ t('pr.noBreaking') }}</p>
           <ul v-else class="space-y-2">
             <li v-for="finding in review.breakingChanges" :key="finding" class="text-xs leading-5 text-atlas-muted">{{ finding }}</li>
           </ul>
@@ -160,7 +161,7 @@ const selectPullRequest = (pullRequest: PullRequest) => {
       </div>
 
       <div class="mb-3 flex items-center gap-2">
-        <h2 class="ui-title text-base">Open pull requests</h2>
+        <h2 class="ui-title text-base">{{ t('pr.openPullRequests') }}</h2>
         <span class="ui-span rounded-full bg-atlas-canvas px-2 py-0.5 text-xs font-semibold text-atlas-muted">{{ pullRequests.length }}</span>
       </div>
       <div class="overflow-x-auto">
@@ -168,10 +169,10 @@ const selectPullRequest = (pullRequest: PullRequest) => {
           <thead class="text-xs font-medium text-atlas-muted">
             <tr>
               <th class="border-b border-atlas-line py-2 font-medium">PR</th>
-              <th class="border-b border-atlas-line py-2 font-medium">Title</th>
-              <th class="border-b border-atlas-line py-2 font-medium">Files</th>
-              <th class="border-b border-atlas-line py-2 font-medium">Risk</th>
-              <th class="border-b border-atlas-line py-2 font-medium">Checks</th>
+              <th class="border-b border-atlas-line py-2 font-medium">{{ t('pr.title') }}</th>
+              <th class="border-b border-atlas-line py-2 font-medium">{{ t('common.files') }}</th>
+              <th class="border-b border-atlas-line py-2 font-medium">{{ t('common.risk') }}</th>
+              <th class="border-b border-atlas-line py-2 font-medium">{{ t('pr.checks') }}</th>
             </tr>
           </thead>
           <tbody v-if="pullRequests.length">
@@ -196,7 +197,7 @@ const selectPullRequest = (pullRequest: PullRequest) => {
           <tbody v-else>
             <tr>
               <td colspan="5" class="py-8 text-center text-sm text-atlas-muted">
-                No open pull requests were returned by GitHub.
+                {{ t('pr.noOpen') }}
               </td>
             </tr>
           </tbody>
@@ -205,7 +206,7 @@ const selectPullRequest = (pullRequest: PullRequest) => {
     </div>
 
     <div v-else class="space-y-3 p-4">
-      <h2 class="ui-title text-base">Risk signals</h2>
+      <h2 class="ui-title text-base">{{ t('pr.riskSignals') }}</h2>
       <div v-for="signal in riskSignals" :key="signal" class="rounded-atlas border border-atlas-border bg-atlas-canvas p-3 text-sm leading-5 text-atlas-ink">
         {{ signal }}
       </div>

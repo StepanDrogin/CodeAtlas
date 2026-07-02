@@ -12,22 +12,23 @@ defineEmits<{
   'view-report': []
 }>()
 
+const { t } = useCodeAtlasI18n()
 const displayRepository = computed(() => repoUrl.value.replace(/^https?:\/\//, '').replace(/^github\.com\//, '') || 'github.com/org/repo')
 const statusLabel = computed(() => {
   if (props.analysisError) {
-    return 'Needs attention'
+    return t('repository.needsAttention')
   }
 
-  return props.isAnalyzing ? 'Analyzing' : 'Analyzed'
+  return props.isAnalyzing ? t('repository.analyzing') : t('common.analyzed')
 })
 </script>
 
 <template>
   <section class="atlas-panel overflow-hidden">
-    <h2 class="ui-title sr-only">Repository command</h2>
+    <h2 class="ui-title sr-only">{{ t('repository.command') }}</h2>
     <div class="grid gap-3 p-3 2xl:grid-cols-[minmax(0,1fr)_auto_minmax(360px,520px)] 2xl:items-center">
       <form class="flex min-w-0 flex-col gap-3 sm:flex-row" @submit.prevent="$emit('analyze')">
-        <label class="sr-only" for="repo-url">GitHub repository URL</label>
+        <label class="sr-only" for="repo-url">{{ t('repository.urlLabel') }}</label>
         <div class="relative flex-1">
           <svg aria-hidden="true" class="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-atlas-ink" viewBox="0 0 24 24" fill="currentColor">
             <path fill-rule="evenodd" d="M12 .5a12 12 0 0 0-3.79 23.39c.6.11.82-.26.82-.58v-2.03c-3.34.73-4.04-1.41-4.04-1.41-.55-1.39-1.34-1.76-1.34-1.76-1.09-.75.08-.74.08-.74 1.2.09 1.84 1.24 1.84 1.24 1.08 1.84 2.82 1.31 3.51 1 .11-.78.42-1.31.76-1.61-2.66-.3-5.46-1.33-5.46-5.93 0-1.31.47-2.38 1.23-3.22-.12-.3-.53-1.52.12-3.18 0 0 1-.32 3.3 1.23a11.49 11.49 0 0 1 6 0c2.29-1.55 3.3-1.23 3.3-1.23.65 1.66.24 2.88.12 3.18.77.84 1.23 1.91 1.23 3.22 0 4.61-2.8 5.62-5.47 5.92.43.37.81 1.1.81 2.22v3.3c0 .32.22.7.83.58A12 12 0 0 0 12 .5Z" clip-rule="evenodd" />
@@ -49,7 +50,7 @@ const statusLabel = computed(() => {
           :aria-busy="isAnalyzing"
         >
           <span v-if="isAnalyzing" class="ui-span h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white"></span>
-          <span class="ui-span">{{ isAnalyzing ? 'Analyzing...' : 'Analyze repository' }}</span>
+          <span class="ui-span">{{ isAnalyzing ? t('repository.analyzingCta') : t('repository.analyzeCta') }}</span>
         </button>
       </form>
 
@@ -79,7 +80,7 @@ const statusLabel = computed(() => {
           class="ui-button h-10 whitespace-nowrap border-atlas-border bg-white px-4 text-atlas-ink shadow-sm hover:border-atlas-accent hover:text-atlas-accent"
           @click="$emit('view-report')"
         >
-          <span class="ui-span">View report</span>
+          <span class="ui-span">{{ t('repository.viewReport') }}</span>
         </button>
       </div>
     </div>

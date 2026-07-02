@@ -16,18 +16,20 @@ const statusClass: Record<WorkspaceSetupStep['status'], string> = {
   active: 'border-atlas-accent/30 bg-atlas-rail text-atlas-accent',
   pending: 'border-atlas-border bg-white text-atlas-muted'
 }
+
+const { t } = useCodeAtlasI18n()
 </script>
 
 <template>
   <section class="atlas-panel overflow-hidden">
     <div class="flex flex-col gap-3 border-b border-atlas-line px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
       <div>
-        <h2 class="ui-title text-base">Workspace setup</h2>
-        <p class="mt-1 text-xs leading-5 text-atlas-muted">A saved analysis workspace with AI context, reports, and review state.</p>
+        <h2 class="ui-title text-base">{{ t('setup.title') }}</h2>
+        <p class="mt-1 text-xs leading-5 text-atlas-muted">{{ t('setup.detail') }}</p>
       </div>
       <div class="flex flex-wrap gap-2">
         <span class="ui-span rounded-atlas border border-atlas-border bg-white px-2.5 py-1 text-xs font-semibold text-atlas-muted">
-          {{ savedWorkspaceCount }} saved
+          {{ t('setup.savedBadge', { count: savedWorkspaceCount }) }}
         </span>
         <span class="ui-span rounded-atlas border border-atlas-border bg-white px-2.5 py-1 text-xs font-semibold text-atlas-muted">
           {{ lastSavedAt }}

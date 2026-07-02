@@ -9,14 +9,16 @@ defineProps<{
 defineEmits<{
   select: [repository: string]
 }>()
+
+const { t } = useCodeAtlasI18n()
 </script>
 
 <template>
   <section class="atlas-panel overflow-hidden">
     <div class="flex items-center justify-between gap-3 border-b border-atlas-line px-4 py-3">
       <div>
-        <h2 class="ui-title text-base">Recent analyses</h2>
-        <p class="mt-1 text-xs text-atlas-muted">Local workspace memory for quick re-runs.</p>
+        <h2 class="ui-title text-base">{{ t('recent.title') }}</h2>
+        <p class="mt-1 text-xs text-atlas-muted">{{ t('recent.detail') }}</p>
       </div>
       <span class="ui-span rounded-full bg-atlas-canvas px-2 py-0.5 text-xs font-semibold text-atlas-muted">{{ analyses.length }}</span>
     </div>
@@ -47,7 +49,7 @@ defineEmits<{
     </div>
 
     <div v-else class="px-4 py-8 text-sm leading-6 text-atlas-muted">
-      Run a repository analysis and CodeAtlas will keep it here for this browser.
+      {{ t('recent.empty') }}
     </div>
   </section>
 </template>

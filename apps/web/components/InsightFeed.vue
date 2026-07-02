@@ -22,16 +22,18 @@ const dotClass: Record<InsightItem['tone'], string> = {
   warning: 'bg-atlas-warning',
   risk: 'bg-atlas-danger'
 }
+
+const { t } = useCodeAtlasI18n()
 </script>
 
 <template>
   <section class="atlas-panel overflow-hidden">
     <div class="flex items-center justify-between gap-3 border-b border-atlas-line px-4 py-3">
       <div>
-        <h2 class="ui-title text-base">Insight feed</h2>
-        <p class="mt-1 text-xs text-atlas-muted">Live-style findings from the current repository context.</p>
+        <h2 class="ui-title text-base">{{ t('insights.title') }}</h2>
+        <p class="mt-1 text-xs text-atlas-muted">{{ t('insights.detail') }}</p>
       </div>
-      <span class="ui-span rounded-atlas border border-atlas-border bg-white px-2.5 py-1 text-xs font-semibold text-atlas-muted">High signal</span>
+      <span class="ui-span rounded-atlas border border-atlas-border bg-white px-2.5 py-1 text-xs font-semibold text-atlas-muted">{{ t('insights.badge') }}</span>
     </div>
 
     <div class="divide-y divide-atlas-line">
@@ -48,7 +50,7 @@ const dotClass: Record<InsightItem['tone'], string> = {
           </div>
           <div class="flex items-center gap-2 md:justify-end">
             <span class="ui-span w-fit rounded border px-2 py-1 text-xs font-semibold" :class="toneClass[insight.tone]">
-              {{ insight.tone === 'risk' ? 'High' : insight.tone === 'warning' ? 'Medium' : 'Info' }}
+              {{ insight.tone === 'risk' ? t('common.risk') : insight.tone === 'warning' ? t('common.medium') : t('common.info') }}
             </span>
             <button
               v-if="insight.section && insight.action"

@@ -11,31 +11,31 @@ export default <Partial<Config>>{
     extend: {
       colors: {
         atlas: {
-          canvas: '#f5f8fb',
-          surface: '#ffffff',
-          rail: '#eaf8f6',
-          ink: '#101828',
-          muted: '#64748b',
-          subtle: '#94a3b8',
-          border: '#d8e2ec',
-          line: '#edf2f7',
-          accent: '#007f78',
-          accentDark: '#005f5b',
-          success: '#12b76a',
-          warning: '#f79009',
-          danger: '#d92d20',
-          info: '#2e90fa',
-          cyan: '#08aeb8',
-          violet: '#7a5af8'
+          canvas: 'rgb(var(--atlas-canvas) / <alpha-value>)',
+          surface: 'rgb(var(--atlas-surface) / <alpha-value>)',
+          rail: 'rgb(var(--atlas-rail) / <alpha-value>)',
+          ink: 'rgb(var(--atlas-ink) / <alpha-value>)',
+          muted: 'rgb(var(--atlas-muted) / <alpha-value>)',
+          subtle: 'rgb(var(--atlas-subtle) / <alpha-value>)',
+          border: 'rgb(var(--atlas-border) / <alpha-value>)',
+          line: 'rgb(var(--atlas-line) / <alpha-value>)',
+          accent: 'rgb(var(--atlas-accent) / <alpha-value>)',
+          accentDark: 'rgb(var(--atlas-accent-dark) / <alpha-value>)',
+          success: 'rgb(var(--atlas-success) / <alpha-value>)',
+          warning: 'rgb(var(--atlas-warning) / <alpha-value>)',
+          danger: 'rgb(var(--atlas-danger) / <alpha-value>)',
+          info: 'rgb(var(--atlas-info) / <alpha-value>)',
+          cyan: 'rgb(var(--atlas-cyan) / <alpha-value>)',
+          violet: 'rgb(var(--atlas-violet) / <alpha-value>)'
         }
       },
       borderRadius: {
         atlas: '8px'
       },
       boxShadow: {
-        atlas: '0 18px 45px rgba(16, 24, 40, 0.07)',
-        insetLine: 'inset 0 0 0 1px rgba(216, 226, 236, 0.92)',
-        instrument: '0 24px 60px rgba(0, 127, 120, 0.16)'
+        atlas: '0 18px 45px rgb(var(--atlas-shadow) / 0.16)',
+        insetLine: 'inset 0 0 0 1px rgb(var(--atlas-border) / 0.86)',
+        instrument: '0 24px 60px rgb(var(--atlas-accent) / 0.20)'
       },
       fontFamily: {
         sans: [

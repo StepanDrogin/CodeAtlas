@@ -8,8 +8,9 @@ const props = defineProps<{
   segments: HealthSegment[]
 }>()
 
+const { t } = useCodeAtlasI18n()
 const ringStyle = computed(() => ({
-  background: `conic-gradient(#007f78 ${Math.max(0, Math.min(props.score, 100)) * 3.6}deg, #b8eee9 ${Math.max(0, Math.min(props.score, 100)) * 3.6 + 36}deg, #e7eef5 0deg)`
+  background: `conic-gradient(rgb(var(--atlas-accent)) ${Math.max(0, Math.min(props.score, 100)) * 3.6}deg, rgb(var(--atlas-rail)) ${Math.max(0, Math.min(props.score, 100)) * 3.6 + 36}deg, rgb(var(--atlas-line)) 0deg)`
 }))
 
 const toneClass: Record<HealthSegment['tone'], string> = {
@@ -28,7 +29,7 @@ const barClass: Record<HealthSegment['tone'], string> = {
 <template>
   <section class="atlas-panel overflow-hidden">
     <div class="border-b border-atlas-line px-4 py-3">
-      <h2 class="ui-title text-base">Repository health</h2>
+      <h2 class="ui-title text-base">{{ t('health.title') }}</h2>
       <p class="mt-1 truncate text-xs text-atlas-muted">{{ repositoryName }}</p>
     </div>
 

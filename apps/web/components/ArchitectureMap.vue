@@ -24,12 +24,18 @@ const nodeTone: Record<ArchitectureNode['kind'], string> = {
   external: 'border-slate-300 bg-slate-50 text-slate-900 hover:border-slate-500'
 }
 
-const kindLabel: Record<ArchitectureNode['kind'], string> = {
-  api: 'API',
-  service: 'Service',
-  worker: 'Worker',
-  data: 'Data',
-  external: 'External'
+const { t } = useCodeAtlasI18n()
+
+const kindLabel = (kind: ArchitectureNode['kind']) => {
+  const labels: Record<ArchitectureNode['kind'], string> = {
+    api: t('architecture.api'),
+    service: t('architecture.service'),
+    worker: t('architecture.worker'),
+    data: t('architecture.data'),
+    external: t('architecture.external')
+  }
+
+  return labels[kind]
 }
 
 const selectedNode = computed(() => props.nodes.find((node) => node.id === selectedNodeId.value) ?? props.nodes[0])
@@ -96,25 +102,25 @@ watch(
   <section class="atlas-panel overflow-hidden">
     <div class="flex flex-col gap-2 border-b border-atlas-line px-4 py-3 md:flex-row md:items-center md:justify-between">
       <div class="flex items-center gap-2">
-        <h2 class="ui-title text-base">Architecture map</h2>
-        <span class="ui-span text-xs text-atlas-muted">Click a node to inspect ownership</span>
+        <h2 class="ui-title text-base">{{ t('architecture.title') }}</h2>
+        <span class="ui-span text-xs text-atlas-muted">{{ t('architecture.hint') }}</span>
       </div>
       <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
         <span class="ui-span inline-flex items-center gap-1 text-xs text-atlas-muted">
           <span class="ui-span h-2.5 w-2.5 rounded-sm bg-emerald-400"></span>
-          API
+          {{ t('architecture.api') }}
         </span>
         <span class="ui-span inline-flex items-center gap-1 text-xs text-atlas-muted">
           <span class="ui-span h-2.5 w-2.5 rounded-sm bg-blue-400"></span>
-          Service
+          {{ t('architecture.service') }}
         </span>
         <span class="ui-span inline-flex items-center gap-1 text-xs text-atlas-muted">
           <span class="ui-span h-2.5 w-2.5 rounded-sm bg-violet-400"></span>
-          Worker
+          {{ t('architecture.worker') }}
         </span>
         <span class="ui-span inline-flex items-center gap-1 text-xs text-atlas-muted">
           <span class="ui-span h-2.5 w-2.5 rounded-sm bg-amber-400"></span>
-          Data
+          {{ t('architecture.data') }}
         </span>
       </div>
     </div>
@@ -134,7 +140,7 @@ watch(
           </svg>
 
           <div v-if="selectedNode" class="absolute left-1/2 top-1/2 z-10 flex h-32 w-32 -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center rounded-full bg-atlas-accent p-4 text-center text-white shadow-instrument">
-            <span class="ui-span text-xs font-semibold opacity-80">{{ kindLabel[selectedNode.kind] }}</span>
+            <span class="ui-span text-xs font-semibold opacity-80">{{ kindLabel(selectedNode.kind) }}</span>
             <span class="ui-span mt-1 text-sm font-semibold leading-5">{{ selectedNode.label }}</span>
           </div>
 
@@ -148,15 +154,15 @@ watch(
           >
             <span class="ui-span flex w-full items-center justify-between gap-2">
               <span class="ui-span min-w-0 text-sm font-semibold leading-5">{{ node.label }}</span>
-              <span class="ui-span rounded bg-white/80 px-2 py-0.5 text-[11px] font-semibold">{{ kindLabel[node.kind] }}</span>
+              <span class="ui-span rounded bg-white/80 px-2 py-0.5 text-[11px] font-semibold">{{ kindLabel(node.kind) }}</span>
             </span>
             <span class="ui-span text-xs opacity-80">{{ node.detail }}</span>
           </button>
 
           <div class="absolute bottom-5 left-1/2 flex -translate-x-1/2 items-center gap-4 rounded-atlas border border-atlas-line bg-white/92 px-4 py-2 shadow-sm backdrop-blur">
-            <span class="ui-span inline-flex items-center gap-1 text-xs text-atlas-muted"><span class="ui-span h-2 w-5 rounded-full bg-atlas-accent"></span>Service</span>
-            <span class="ui-span inline-flex items-center gap-1 text-xs text-atlas-muted"><span class="ui-span h-2 w-5 rounded-full bg-atlas-violet"></span>Worker</span>
-            <span class="ui-span inline-flex items-center gap-1 text-xs text-atlas-muted"><span class="ui-span h-2 w-5 rounded-full bg-atlas-border"></span>External</span>
+            <span class="ui-span inline-flex items-center gap-1 text-xs text-atlas-muted"><span class="ui-span h-2 w-5 rounded-full bg-atlas-accent"></span>{{ t('architecture.service') }}</span>
+            <span class="ui-span inline-flex items-center gap-1 text-xs text-atlas-muted"><span class="ui-span h-2 w-5 rounded-full bg-atlas-violet"></span>{{ t('architecture.worker') }}</span>
+            <span class="ui-span inline-flex items-center gap-1 text-xs text-atlas-muted"><span class="ui-span h-2 w-5 rounded-full bg-atlas-border"></span>{{ t('architecture.external') }}</span>
           </div>
         </div>
       </div>
@@ -164,14 +170,14 @@ watch(
       <aside class="border-t border-atlas-line bg-white xl:border-l xl:border-t-0">
         <div v-if="selectedNode" class="flex h-full flex-col">
           <div class="border-b border-atlas-line px-4 py-4">
-            <span class="ui-span rounded bg-atlas-rail px-2 py-1 text-xs font-semibold text-atlas-accent">{{ kindLabel[selectedNode.kind] }}</span>
+            <span class="ui-span rounded bg-atlas-rail px-2 py-1 text-xs font-semibold text-atlas-accent">{{ kindLabel(selectedNode.kind) }}</span>
             <h3 class="ui-title mt-3 text-xl">{{ selectedNode.label }}</h3>
             <p class="mt-2 text-sm leading-6 text-atlas-muted">{{ selectedNode.detail }}</p>
           </div>
 
           <div class="space-y-4 px-4 py-4">
             <section>
-              <h4 class="ui-title text-sm">Source ownership</h4>
+              <h4 class="ui-title text-sm">{{ t('architecture.sourceOwnership') }}</h4>
               <div v-if="selectedReferences.length" class="mt-3 space-y-2">
                 <article v-for="reference in selectedReferences" :key="reference.file" class="rounded-atlas border border-atlas-line bg-atlas-canvas px-3 py-2">
                   <p class="truncate text-sm font-semibold text-atlas-ink">{{ reference.file }}</p>
@@ -179,33 +185,33 @@ watch(
                 </article>
               </div>
               <p v-else class="mt-3 rounded-atlas border border-atlas-line bg-atlas-canvas px-3 py-3 text-sm leading-5 text-atlas-muted">
-                No direct files matched this node yet. Ask CodeAtlas for the exact source path before changing it.
+                {{ t('architecture.noFiles') }}
               </p>
             </section>
 
             <section>
-              <h4 class="ui-title text-sm">Signals</h4>
+              <h4 class="ui-title text-sm">{{ t('architecture.signals') }}</h4>
               <div v-if="selectedRisks.length" class="mt-3 space-y-2">
                 <p v-for="risk in selectedRisks" :key="risk" class="rounded-atlas border border-red-100 bg-red-50 px-3 py-2 text-sm leading-5 text-atlas-danger">
                   {{ risk }}
                 </p>
               </div>
               <p v-else class="mt-3 rounded-atlas border border-emerald-100 bg-emerald-50 px-3 py-2 text-sm leading-5 text-atlas-success">
-                No direct risk signal is attached to this node.
+                {{ t('architecture.noRisk') }}
               </p>
             </section>
 
             <section class="rounded-atlas border border-atlas-border bg-atlas-canvas p-3">
-              <h4 class="ui-title text-sm">Recommended next action</h4>
+              <h4 class="ui-title text-sm">{{ t('architecture.nextAction') }}</h4>
               <p class="mt-2 text-sm leading-5 text-atlas-muted">
-                Review the ownership files, then ask CodeAtlas to explain coupling and tests for {{ selectedNode.label }}.
+                {{ t('architecture.nextActionDetail', { node: selectedNode.label }) }}
               </p>
               <button
                 type="button"
                 class="ui-button mt-3 h-9 w-full border-atlas-border bg-white px-3 text-atlas-ink hover:border-atlas-accent hover:text-atlas-accent"
                 @click="$emit('ask-node', selectedNode)"
               >
-                <span class="ui-span">Ask about this node</span>
+                <span class="ui-span">{{ t('architecture.askNode') }}</span>
               </button>
             </section>
           </div>

@@ -14,6 +14,7 @@ import type {
   AnalysisStep,
   HealthSegment,
   InsightItem,
+  NavItem,
   NavSection,
   PullRequest,
   PullRequestReview,
@@ -24,6 +25,16 @@ import type {
   SourceReference,
   WorkspaceSetupStep
 } from '~/types/codeatlas'
+import {
+  CODEATLAS_LOCALE_STORAGE_KEY,
+  CODEATLAS_THEME_STORAGE_KEY
+} from '~/composables/useCodeAtlasPreferences'
+import {
+  isCodeAtlasLocale,
+  isCodeAtlasThemePreference,
+  type CodeAtlasMessageKey,
+  type CodeAtlasResolvedTheme
+} from '~/utils/codeatlas-i18n'
 
 interface AiQuestionResponse {
   answer: string
@@ -96,8 +107,64 @@ const ANALYSIS_TIMELINE_BASE = [
   }
 ] as const
 const SAVED_REFERENCE_PRIORITIES: SavedReferencePriority[] = ['Critical path', 'Architecture', 'API boundary', 'Review context', 'Watch']
+const NAV_LABEL_KEYS: Record<NavSection, CodeAtlasMessageKey> = {
+  repository: 'nav.repository',
+  architecture: 'nav.architecture',
+  ask: 'nav.ask',
+  'pr-review': 'nav.prReview',
+  observability: 'nav.observability',
+  bookmarks: 'nav.bookmarks',
+  reports: 'nav.reports',
+  integrations: 'nav.integrations',
+  settings: 'nav.settings'
+}
+const PAGE_DESCRIPTION_KEYS: Record<NavSection, CodeAtlasMessageKey> = {
+  repository: 'page.repository',
+  architecture: 'page.architecture',
+  ask: 'page.ask',
+  'pr-review': 'page.prReview',
+  observability: 'page.observability',
+  bookmarks: 'page.bookmarks',
+  reports: 'page.reports',
+  integrations: 'page.integrations',
+  settings: 'page.settings'
+}
+const TIMELINE_LABEL_KEYS: Record<typeof ANALYSIS_TIMELINE_BASE[number]['id'], CodeAtlasMessageKey> = {
+  connect: 'timeline.connect.label',
+  index: 'timeline.index.label',
+  architecture: 'timeline.architecture.label',
+  risk: 'timeline.risk.label',
+  ai: 'timeline.ai.label'
+}
+const TIMELINE_DETAIL_KEYS: Record<typeof ANALYSIS_TIMELINE_BASE[number]['id'], CodeAtlasMessageKey> = {
+  connect: 'timeline.connect.detail',
+  index: 'timeline.index.detail',
+  architecture: 'timeline.architecture.detail',
+  risk: 'timeline.risk.detail',
+  ai: 'timeline.ai.detail'
+}
+const SAVED_REFERENCE_PRIORITY_LABEL_KEYS: Record<SavedReferencePriority, CodeAtlasMessageKey> = {
+  'Critical path': 'priority.critical',
+  Architecture: 'priority.architecture',
+  'API boundary': 'priority.api',
+  'Review context': 'priority.review',
+  Watch: 'priority.watch'
+}
 
 const config = useRuntimeConfig()
+const {
+  activeTheme,
+  activeThemeLabel,
+  formatNumber,
+  locale,
+  localeOptions,
+  localeTag,
+  setLocale,
+  setThemePreference,
+  t,
+  themeOptions,
+  themePreference
+} = useCodeAtlasI18n()
 const activeSection = ref<NavSection>('repository')
 const repoUrl = ref('github.com/nuxt/nuxt')
 const prUrl = ref('github.com/nuxt/nuxt/pull/32537')
@@ -129,6 +196,13 @@ let analysisProgressTimer: ReturnType<typeof setInterval> | null = null
 const answer = ref(
   'This repository is a TypeScript-first SaaS monorepo with a Nuxt dashboard, Fastify API boundary, background workers, and shared packages for GitHub, AI prompts, and repository analysis.'
 )
+const preferencesReady = ref(false)
+let themeMediaQuery: MediaQueryList | null = null
+
+const localizedNavItems = computed<NavItem[]>(() => navItems.map((item) => ({
+  ...item,
+  label: t(NAV_LABEL_KEYS[item.id])
+})))
 
 const architectureNodes = computed(() => analysis.value?.architectureNodes ?? demoArchitectureNodes)
 const sourceReferences = computed(() => analysis.value?.sourceReferences ?? demoSourceReferences)
@@ -159,33 +233,35 @@ const aiConfidence = computed(() => {
   return clampScore(referenceScore + liveBonus + 30 - riskPenalty)
 })
 const isDemoMode = computed(() => String(config.public.demoMode) === 'true')
-const currentSection = computed(() => navItems.find((item) => item.id === activeSection.value) ?? {
+const currentSection = computed(() => localizedNavItems.value.find((item) => item.id === activeSection.value) ?? {
   id: 'repository' as const,
-  label: 'Repository',
+  label: t('nav.repository'),
   icon: 'repository'
 })
 const repositoryName = computed(() => analysis.value?.repository.fullName ?? normalizeRepositoryFullName(repoUrl.value) ?? 'nuxt/nuxt')
 const repositoryDescription = computed(
-  () => analysis.value?.repository.description || 'Repository intelligence workspace for architecture, references, PR review, and operational signals.'
+  () => analysis.value?.repository.description || t('repository.descriptionFallback')
 )
 const sectionMeta = computed(() => {
   switch (activeSection.value) {
     case 'architecture':
-      return `${architectureNodes.value.length} nodes across the code graph`
+      return `${formatNumber(architectureNodes.value.length)} ${t('architecture.title')}`
     case 'ask':
-      return isDemoMode.value ? 'Demo answer mode' : 'Gemini server route'
+      return isDemoMode.value ? t('status.demoFallback') : t('integrations.serverRoute')
     case 'pr-review':
-      return `${pullRequests.value.length} open pull requests`
+      return `${formatNumber(pullRequests.value.length)} ${t('pr.openPullRequests').toLowerCase()}`
     case 'observability':
-      return `${metrics.length} live-style metrics`
+      return `${formatNumber(metrics.length)} ${t('observability.metric').toLowerCase()}`
     case 'bookmarks':
-      return savedReferences.value.length ? `${savedReferences.value.length} saved references` : `${bookmarkedReferences.value.length} suggested references`
+      return savedReferences.value.length
+        ? `${formatNumber(savedReferences.value.length)} ${t('bookmarks.savedReferences').toLowerCase()}`
+        : `${formatNumber(bookmarkedReferences.value.length)} ${t('bookmarks.suggested').toLowerCase()}`
     case 'reports':
-      return `${reportRows.value.length} generated reports`
+      return `${formatNumber(reportRows.value.length)} ${t('nav.reports').toLowerCase()}`
     case 'integrations':
-      return `${integrationRows.value.length} integration endpoints`
+      return `${formatNumber(integrationRows.value.length)} ${t('nav.integrations').toLowerCase()}`
     case 'settings':
-      return 'Workspace preferences'
+      return t('settings.preferences')
     default:
       return repositoryName.value
   }
@@ -195,24 +271,24 @@ const repositoryStats = computed(() => {
 
   return [
     {
-      label: 'Repository',
+      label: t('common.repository'),
       value: repositoryName.value,
       detail: repositoryDescription.value
     },
     {
-      label: 'Language',
+      label: t('common.language'),
       value: repository?.language ?? 'TypeScript',
-      detail: `Default branch ${repository?.defaultBranch ?? 'main'}`
+      detail: t('repository.defaultBranch', { branch: repository?.defaultBranch ?? 'main' })
     },
     {
-      label: 'Files',
-      value: (repository?.fileCount ?? 1842).toLocaleString('en-US'),
-      detail: `${formatLoc(repository?.estimatedLoc ?? 612000)} LOC`
+      label: t('common.files'),
+      value: formatNumber(repository?.fileCount ?? 1842),
+      detail: t('repository.filesDetail', { loc: formatLoc(repository?.estimatedLoc ?? 612000) })
     },
     {
       label: 'Community',
-      value: `${(repository?.stars ?? 12400).toLocaleString('en-US')} stars`,
-      detail: `${(repository?.forks ?? 920).toLocaleString('en-US')} forks`
+      value: `${formatNumber(repository?.stars ?? 12400)} stars`,
+      detail: t('repository.communityDetail', { forks: formatNumber(repository?.forks ?? 920) })
     }
   ]
 })
@@ -229,38 +305,38 @@ const healthSegments = computed<HealthSegment[]>(() => {
 
   return [
     {
-      label: 'Architecture',
+      label: t('health.architecture'),
       score: architectureScore,
       value: `${architectureNodes.value.length} nodes`,
-      detail: 'Layer coverage, service boundaries, and graph readability.',
+      detail: t('health.architectureDetail'),
       tone: scoreTone(architectureScore)
     },
     {
-      label: 'Maintainability',
+      label: t('health.maintainability'),
       score: maintainabilityScore,
       value: `${sourceReferences.value.length} refs`,
-      detail: 'Important source files, PR blast radius, and module clarity.',
+      detail: t('health.maintainabilityDetail'),
       tone: scoreTone(maintainabilityScore)
     },
     {
-      label: 'Security',
+      label: t('health.security'),
       score: securityScore,
-      value: securitySignals ? `${securitySignals} signals` : 'Clear',
-      detail: 'Secret, token, permission, and auth-sensitive findings.',
+      value: securitySignals ? `${securitySignals} signals` : t('health.clear'),
+      detail: t('health.securityDetail'),
       tone: scoreTone(securityScore)
     },
     {
-      label: 'Testability',
+      label: t('health.testability'),
       score: testabilityScore,
-      value: testSignals ? 'Watch' : 'Stable',
-      detail: 'Signals around tests, CI checks, and review coverage.',
+      value: testSignals ? t('health.watch') : t('health.stable'),
+      detail: t('health.testabilityDetail'),
       tone: scoreTone(testabilityScore)
     },
     {
-      label: 'Operations',
+      label: t('health.operations'),
       score: operationsScore,
-      value: isDemoMode.value ? 'Demo' : 'Live',
-      detail: 'Runtime mode, truncation state, and deployment readiness.',
+      value: isDemoMode.value ? t('common.demo') : t('common.liveApi'),
+      detail: t('health.operationsDetail'),
       tone: scoreTone(operationsScore)
     }
   ]
@@ -272,18 +348,18 @@ const repositoryHealthScore = computed(() => {
 })
 const repositoryHealthLabel = computed(() => {
   if (repositoryHealthScore.value >= 90) {
-    return 'Excellent'
+    return t('health.excellent')
   }
 
   if (repositoryHealthScore.value >= 80) {
-    return 'Healthy'
+    return t('health.healthy')
   }
 
   if (repositoryHealthScore.value >= 68) {
-    return 'Watch'
+    return t('health.watch')
   }
 
-  return 'Risky'
+  return t('health.risky')
 })
 const analysisTimelineSteps = computed<AnalysisStep[]>(() => {
   const failedStep = Math.max(0, Math.min(analysisProgressStep.value, ANALYSIS_TIMELINE_BASE.length - 1))
@@ -301,6 +377,8 @@ const analysisTimelineSteps = computed<AnalysisStep[]>(() => {
 
     return {
       ...step,
+      label: t(TIMELINE_LABEL_KEYS[step.id]),
+      detail: t(TIMELINE_DETAIL_KEYS[step.id]),
       status
     }
   })
@@ -314,47 +392,48 @@ const insightFeed = computed<InsightItem[]>(() => {
   return [
     {
       id: 'health',
-      label: `${repositoryHealthLabel.value} repository health`,
-      detail: `Composite score ${repositoryHealthScore.value}/100 across architecture, maintainability, security, tests, and operations.`,
+      label: t('insights.healthLabel', { label: repositoryHealthLabel.value }),
+      detail: t('insights.healthDetail', { score: repositoryHealthScore.value }),
       tone: repositoryHealthScore.value >= 80 ? 'good' : repositoryHealthScore.value >= 68 ? 'warning' : 'risk',
       section: 'reports',
-      action: 'Open reports'
+      action: t('insights.openReports')
     },
     {
       id: 'risk',
-      label: risk ? 'Top risk signal' : 'Risk scan clean',
-      detail: risk ?? 'No blocking repository hygiene risks were detected in the current analysis.',
+      label: risk ? t('insights.topRisk') : t('insights.cleanRisk'),
+      detail: risk ?? t('insights.cleanRiskDetail'),
       tone: risk ? 'risk' : 'good',
       section: risk ? 'pr-review' : 'architecture',
-      action: risk ? 'Review risk' : 'Inspect architecture'
+      action: risk ? t('insights.reviewRisk') : t('insights.inspectArchitecture')
     },
     {
       id: 'pr',
-      label: highRiskPullRequest ? `Escalated PR ${highRiskPullRequest.id}` : 'Pull requests ready',
+      label: highRiskPullRequest ? t('insights.escalatedPr', { id: highRiskPullRequest.id }) : t('insights.prReady'),
       detail: highRiskPullRequest
-        ? `${highRiskPullRequest.title} touches ${highRiskPullRequest.changedFiles} files and should be reviewed before merge.`
-        : `${pullRequests.value.length} pull requests are available with no high-risk item first in queue.`,
+        ? t('insights.prDetail', { title: highRiskPullRequest.title, count: highRiskPullRequest.changedFiles })
+        : t('insights.prReadyDetail', { count: pullRequests.value.length }),
       tone: highRiskPullRequest ? 'warning' : 'info',
       section: 'pr-review',
-      action: 'Open PR review'
+      action: t('insights.openPrReview')
     },
     {
       id: 'opportunity',
-      label: opportunity?.label ?? 'Next opportunity',
-      detail: opportunity?.text ?? 'Ask CodeAtlas for a targeted refactor or test plan.',
+      label: opportunity?.label ?? t('insights.nextOpportunity'),
+      detail: opportunity?.text ?? t('insights.nextOpportunityDetail'),
       tone: 'info',
       section: 'ask',
-      action: 'Ask CodeAtlas'
+      action: t('insights.askCodeAtlas')
     },
     {
       id: 'strength',
-      label: strength?.label ?? 'Strength detected',
-      detail: strength?.text ?? 'The repository has enough source references for a grounded first pass.',
+      label: strength?.label ?? t('insights.strengthDetected'),
+      detail: strength?.text ?? t('insights.strengthDetail'),
       tone: 'good'
     }
   ]
 })
 const savedReferenceFiles = computed(() => savedReferences.value.map((reference) => reference.file))
+const savedReferencePriorityLabel = (priority: SavedReferencePriority) => t(SAVED_REFERENCE_PRIORITY_LABEL_KEYS[priority])
 const bookmarkedReferences = computed<SavedReference[]>(() => {
   const suggestedReferences = sourceReferences.value
     .filter((reference) => !savedReferenceFiles.value.includes(reference.file))
@@ -365,20 +444,23 @@ const bookmarkedReferences = computed<SavedReference[]>(() => {
 })
 const reportRows = computed(() => [
   {
-    name: 'Architecture brief',
-    status: 'Ready',
+    name: t('reports.architectureBrief'),
+    status: 'ready',
+    statusLabel: t('reports.ready'),
     scope: `${architectureNodes.value.length} nodes`,
     updated: lastAnalyzedAt.value
   },
   {
-    name: 'Risk register',
-    status: riskSignals.value.length ? 'Needs review' : 'Ready',
+    name: t('reports.riskRegister'),
+    status: riskSignals.value.length ? 'review' : 'ready',
+    statusLabel: riskSignals.value.length ? t('reports.needsReview') : t('reports.ready'),
     scope: `${riskSignals.value.length} signals`,
     updated: activePullRequestReview.value.analyzedAt
   },
   {
-    name: 'PR review pack',
-    status: activePullRequestReview.value.risk === 'High' ? 'Escalated' : 'Ready',
+    name: t('reports.prReviewPack'),
+    status: activePullRequestReview.value.risk === 'High' ? 'escalated' : 'ready',
+    statusLabel: activePullRequestReview.value.risk === 'High' ? t('reports.escalated') : t('reports.ready'),
     scope: `${activePullRequestReview.value.changedFiles} files changed`,
     updated: activePullRequestReview.value.id
   }
@@ -386,31 +468,33 @@ const reportRows = computed(() => [
 const workspaceSetupSteps = computed<WorkspaceSetupStep[]>(() => [
   {
     id: 'connect',
-    label: 'Connect repository',
-    detail: analysis.value ? `${repositoryName.value} is indexed with live source metadata.` : 'Paste a GitHub repository URL or keep the demo workspace.',
+    label: t('setup.connect.label'),
+    detail: analysis.value ? t('setup.connect.live', { repository: repositoryName.value }) : t('setup.connect.demo'),
     status: analysis.value || repoUrl.value ? 'done' : 'active',
-    action: 'Edit repository'
+    action: t('setup.connect.action')
   },
   {
     id: 'analyze',
-    label: 'Run analysis',
-    detail: analysis.value ? `${sourceReferences.value.length} source references and ${architectureNodes.value.length} nodes are ready.` : 'Build architecture, references, risk signals, and PR context.',
+    label: t('setup.analyze.label'),
+    detail: analysis.value
+      ? t('setup.analyze.live', { sources: sourceReferences.value.length, nodes: architectureNodes.value.length })
+      : t('setup.analyze.demo'),
     status: analysis.value ? 'done' : 'active',
-    action: analysis.value ? 'Re-run analysis' : 'Analyze now'
+    action: analysis.value ? t('setup.analyze.actionReady') : t('setup.analyze.actionIdle')
   },
   {
     id: 'ask',
-    label: 'Ask with sources',
-    detail: aiSessionHistory.value.length ? `${aiSessionHistory.value.length} AI session questions are saved.` : 'Ask Gemini or local fallback a repository question with cited files.',
+    label: t('setup.ask.label'),
+    detail: aiSessionHistory.value.length ? t('setup.ask.live', { count: aiSessionHistory.value.length }) : t('setup.ask.demo'),
     status: aiSessionHistory.value.length ? 'done' : analysis.value ? 'active' : 'pending',
-    action: 'Open AI workspace'
+    action: t('setup.ask.action')
   },
   {
     id: 'export',
-    label: 'Export report',
-    detail: lastReportExportedAt.value === 'Not exported yet' ? 'Create a Markdown or JSON report for portfolio review.' : `Last exported ${lastReportExportedAt.value}.`,
+    label: t('setup.export.label'),
+    detail: lastReportExportedAt.value === 'Not exported yet' ? t('setup.export.idle') : t('setup.export.done', { time: lastReportExportedAt.value }),
     status: lastReportExportedAt.value === 'Not exported yet' ? 'pending' : 'done',
-    action: 'Export package'
+    action: t('setup.export.action')
   }
 ])
 const aiFollowUpPrompts = computed(() => {
@@ -434,7 +518,7 @@ const reportMarkdown = computed(() => {
   const risks = riskSignals.value.length ? riskSignals.value.map((risk) => `- ${risk}`).join('\n') : '- No blocking risk signals detected.'
   const sources = sourceReferences.value.slice(0, 10).map((reference) => `- \`${reference.file}\` (${reference.service}): ${reference.description}`).join('\n')
   const saved = savedReferences.value.length
-    ? savedReferences.value.map((reference) => `- \`${reference.file}\` (${reference.priority}): ${reference.note || reference.description}`).join('\n')
+    ? savedReferences.value.map((reference) => `- \`${reference.file}\` (${savedReferencePriorityLabel(reference.priority)}): ${reference.note || reference.description}`).join('\n')
     : '- No saved references yet.'
   const nodes = architectureNodes.value.map((node) => `- ${node.label} (${node.kind}): ${node.detail}`).join('\n')
   const sessions = aiSessionHistory.value.length
@@ -444,7 +528,7 @@ const reportMarkdown = computed(() => {
 
   return `# CodeAtlas Report: ${repositoryName.value}
 
-Generated: ${new Date().toISOString()}
+Generated: ${new Date().toLocaleString(localeTag.value)}
 Mode: ${isDemoMode.value ? 'Demo fallback' : 'Live API'}
 Health: ${repositoryHealthScore.value}/100 (${repositoryHealthLabel.value})
 
@@ -452,9 +536,9 @@ Health: ${repositoryHealthScore.value}/100 (${repositoryHealthLabel.value})
 
 - URL: ${repository?.url ?? `https://github.com/${repositoryName.value}`}
 - Language: ${repository?.language ?? 'TypeScript'}
-- Files: ${(repository?.fileCount ?? 1842).toLocaleString('en-US')}
+- Files: ${formatNumber(repository?.fileCount ?? 1842)}
 - Estimated LOC: ${formatLoc(repository?.estimatedLoc ?? 612000)}
-- Stars: ${(repository?.stars ?? 12400).toLocaleString('en-US')}
+- Stars: ${formatNumber(repository?.stars ?? 12400)}
 
 ## AI Summary
 
@@ -501,23 +585,23 @@ ${risks}
 const integrationRows = computed(() => [
   {
     name: 'GitHub',
-    status: analysis.value ? 'Synced' : 'Ready',
-    detail: `${sourceReferences.value.length} references, ${pullRequests.value.length} pull requests`
+    status: analysis.value ? t('integrations.synced') : t('reports.ready'),
+    detail: t('integrations.githubDetail', { references: sourceReferences.value.length, pullRequests: pullRequests.value.length })
   },
   {
     name: 'Gemini',
-    status: isDemoMode.value ? 'Demo fallback' : 'Server route',
-    detail: 'Repository summaries, Q&A, and PR review fallback'
+    status: isDemoMode.value ? t('status.demoFallback') : t('integrations.serverRoute'),
+    detail: t('integrations.geminiDetail')
   },
   {
     name: 'Vercel',
-    status: 'Production',
-    detail: 'Server-capable portfolio deployment with live API routes'
+    status: t('integrations.production'),
+    detail: t('integrations.vercelDetail')
   },
   {
     name: 'Local API',
-    status: 'Development',
-    detail: 'Live repository analysis and server-side AI calls'
+    status: t('integrations.development'),
+    detail: t('integrations.localDetail')
   }
 ])
 
@@ -532,63 +616,67 @@ const workspaceSettings = reactive<Record<WorkspaceSettingKey, boolean>>({
 const settingsToggles = computed<Array<{ key: WorkspaceSettingKey; label: string; detail: string; enabled: boolean }>>(() => [
   {
     key: 'autoReview',
-    label: 'Auto PR review',
-    detail: 'Queue review notes when a pull request URL is analyzed.',
+    label: t('settings.autoReview'),
+    detail: t('settings.autoReviewDetail'),
     enabled: workspaceSettings.autoReview
   },
   {
     key: 'strictSignals',
-    label: 'Strict risk signals',
-    detail: 'Keep security, tests, and breaking-change checks prominent.',
+    label: t('settings.strictSignals'),
+    detail: t('settings.strictSignalsDetail'),
     enabled: workspaceSettings.strictSignals
   },
   {
     key: 'privateRepoIndexing',
-    label: 'Private repo indexing',
-    detail: 'Reserved for narrowed GitHub token scopes.',
+    label: t('settings.privateRepoIndexing'),
+    detail: t('settings.privateRepoIndexingDetail'),
     enabled: workspaceSettings.privateRepoIndexing
   }
 ])
 const settingsRows = computed(() => [
-  { label: 'Mode', value: isDemoMode.value ? 'Static demo' : 'Live server' },
-  { label: 'Repository', value: repositoryName.value },
-  { label: 'PR source', value: activePullRequestReview.value.repositoryFullName },
-  { label: 'AI provider', value: isDemoMode.value ? 'Demo fallback' : 'Google Gemini' },
-  { label: 'AI sessions', value: aiSessionHistory.value.length.toString() },
-  { label: 'Saved references', value: savedReferences.value.length.toString() },
-  { label: 'Saved workspaces', value: savedWorkspaces.value.length.toString() },
-  { label: 'Last export', value: lastReportExportedAt.value }
+  { label: t('common.mode'), value: isDemoMode.value ? t('status.staticDemo') : t('common.liveServer') },
+  { label: t('common.repository'), value: repositoryName.value },
+  { label: t('settings.prSource'), value: activePullRequestReview.value.repositoryFullName },
+  { label: t('settings.aiProvider'), value: isDemoMode.value ? t('status.demoFallback') : t('status.googleGemini') },
+  { label: t('settings.aiSessions'), value: aiSessionHistory.value.length.toString() },
+  { label: t('settings.savedReferences'), value: savedReferences.value.length.toString() },
+  { label: t('settings.savedWorkspaces'), value: savedWorkspaces.value.length.toString() },
+  { label: t('common.language'), value: localeOptions.find((option) => option.code === locale.value)?.nativeLabel ?? locale.value },
+  { label: t('settings.theme'), value: t(themeOptions.find((option) => option.code === themePreference.value)?.labelKey ?? 'theme.system') },
+  { label: t('settings.activeTheme'), value: activeThemeLabel.value },
+  { label: t('settings.lastExport'), value: lastReportExportedAt.value === 'Not exported yet' ? t('status.notExported') : lastReportExportedAt.value }
 ])
+const lastWorkspaceSavedLabel = computed(() => lastWorkspaceSavedAt.value === 'Not saved yet' ? t('status.notSaved') : lastWorkspaceSavedAt.value)
 
 const isWorkspaceBusy = computed(() => isAnalyzing.value || isReviewingPr.value || isAsking.value)
 const workspaceActivity = computed<WorkspaceActivity>(() => {
   if (isAnalyzing.value) {
     return {
-      label: 'Analyzing repository',
-      detail: 'Indexing files, architecture, risks, and pull requests.',
+      label: t('workspace.analyzing'),
+      detail: t('workspace.analyzingDetail'),
       tone: 'warning'
     }
   }
 
   if (isReviewingPr.value) {
     return {
-      label: 'Reviewing pull request',
-      detail: 'Collecting changed files and review signals.',
+      label: t('workspace.reviewing'),
+      detail: t('workspace.reviewingDetail'),
       tone: 'warning'
     }
   }
 
   if (isAsking.value) {
     return {
-      label: 'Asking Gemini',
-      detail: 'Preparing an answer from current source references.',
+      label: t('workspace.asking'),
+      detail: t('workspace.askingDetail'),
       tone: 'info'
     }
   }
 
   return recentAction.value ?? {
-    label: 'Workspace ready',
-    detail: 'Controls are available.',
+    label: t('workspace.ready'),
+    detail: t('workspace.readyDetail'),
     tone: 'success'
   }
 })
@@ -617,24 +705,12 @@ const pageTitle = computed(() => {
   return `CodeAtlas ${currentSection.value.label} - ${repositoryName.value}`
 })
 const pageDescription = computed(() => {
-  const sectionDescription: Record<NavSection, string> = {
-    repository: 'Analyze GitHub repositories, source references, architecture, risks, and pull requests in a focused AI workspace.',
-    architecture: 'Map repository layers, service boundaries, workers, data flows, and source references with CodeAtlas.',
-    ask: 'Ask Gemini-backed CodeAtlas questions about the current repository and get answers grounded in source references.',
-    'pr-review': 'Review pull requests with changed-file context, risk signals, missing tests, and suggested reviewer comments.',
-    observability: 'Track repository analysis metrics, latency, requests, error rate, token use, and operational health.',
-    bookmarks: 'Save important source references and pull request watchlist items for follow-up repository work.',
-    reports: 'Generate architecture briefs, risk registers, and pull request review packs from repository analysis.',
-    integrations: 'Connect CodeAtlas with GitHub, Gemini, local APIs, and deployment workflows.',
-    settings: 'Configure CodeAtlas workspace behavior, risk signals, AI mode, and repository context.'
-  }
-
-  return sectionDescription[activeSection.value]
+  return t(PAGE_DESCRIPTION_KEYS[activeSection.value])
 })
 
 useHead(() => ({
   htmlAttrs: {
-    lang: 'en'
+    lang: locale.value
   },
   title: pageTitle.value,
   meta: [
@@ -642,8 +718,8 @@ useHead(() => ({
     { name: 'application-name', content: 'CodeAtlas' },
     { name: 'author', content: 'Stepan Drogin' },
     { name: 'robots', content: 'index, follow, max-image-preview:large' },
-    { name: 'theme-color', content: '#007f78' },
-    { name: 'color-scheme', content: 'light' },
+    { name: 'theme-color', content: activeTheme.value === 'dark' ? '#141b25' : '#007f78' },
+    { name: 'color-scheme', content: activeTheme.value },
     { property: 'og:type', content: 'website' },
     { property: 'og:site_name', content: 'CodeAtlas' },
     { property: 'og:title', content: pageTitle.value },
@@ -695,6 +771,69 @@ watchEffect(() => {
   }
 })
 
+const resolveThemePreference = (): CodeAtlasResolvedTheme => {
+  if (themePreference.value === 'system') {
+    return themeMediaQuery?.matches ? 'dark' : 'light'
+  }
+
+  return themePreference.value
+}
+
+const applyThemePreference = () => {
+  if (!import.meta.client) {
+    return
+  }
+
+  const resolvedTheme = resolveThemePreference()
+  activeTheme.value = resolvedTheme
+  document.documentElement.classList.toggle('theme-dark', resolvedTheme === 'dark')
+  document.documentElement.dataset.theme = resolvedTheme
+  document.documentElement.dataset.themePreference = themePreference.value
+  document.documentElement.lang = locale.value
+  document.documentElement.style.colorScheme = resolvedTheme
+}
+
+const loadUserPreferences = () => {
+  if (!import.meta.client) {
+    return
+  }
+
+  const storedLocale = window.localStorage.getItem(CODEATLAS_LOCALE_STORAGE_KEY)
+  const storedTheme = window.localStorage.getItem(CODEATLAS_THEME_STORAGE_KEY)
+
+  if (isCodeAtlasLocale(storedLocale)) {
+    setLocale(storedLocale)
+  }
+
+  if (isCodeAtlasThemePreference(storedTheme)) {
+    setThemePreference(storedTheme)
+  }
+
+  themeMediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
+  themeMediaQuery.addEventListener('change', applyThemePreference)
+  applyThemePreference()
+  window.setTimeout(() => {
+    preferencesReady.value = true
+  }, 0)
+}
+
+const persistUserPreferences = () => {
+  if (!import.meta.client) {
+    return
+  }
+
+  window.localStorage.setItem(CODEATLAS_LOCALE_STORAGE_KEY, locale.value)
+  window.localStorage.setItem(CODEATLAS_THEME_STORAGE_KEY, themePreference.value)
+}
+
+const handleLocaleInput = (event: Event) => {
+  setLocale((event.target as HTMLSelectElement).value)
+}
+
+const handleThemeInput = (event: Event) => {
+  setThemePreference((event.target as HTMLSelectElement).value)
+}
+
 const notifyWorkspace = (label: string, detail: string, tone: WorkspaceActivity['tone'] = 'info') => {
   recentAction.value = { label, detail, tone }
   activityLog.value = [
@@ -717,11 +856,35 @@ const notifyWorkspace = (label: string, detail: string, tone: WorkspaceActivity[
   }, 2600)
 }
 
+watch(locale, (value, previousValue) => {
+  if (!import.meta.client) {
+    return
+  }
+
+  document.documentElement.lang = value
+  persistUserPreferences()
+
+  if (preferencesReady.value && value !== previousValue) {
+    const language = localeOptions.find((option) => option.code === value)?.nativeLabel ?? value
+    notifyWorkspace(t('notify.languageChanged'), t('notify.languageChangedDetail', { language }), 'success')
+  }
+})
+
+watch(themePreference, (value, previousValue) => {
+  applyThemePreference()
+  persistUserPreferences()
+
+  if (preferencesReady.value && value !== previousValue) {
+    const theme = t(themeOptions.find((option) => option.code === value)?.labelKey ?? 'theme.system')
+    notifyWorkspace(t('notify.themeChanged'), t('notify.themeChangedDetail', { theme }), 'success')
+  }
+})
+
 const changeSection = (section: NavSection) => {
   activeSection.value = section
-  const target = navItems.find((item) => item.id === section)
+  const target = localizedNavItems.value.find((item) => item.id === section)
 
-  notifyWorkspace('Section switched', target?.label ?? 'Workspace view updated', 'info')
+  notifyWorkspace(t('notify.sectionSwitched'), target?.label ?? t('notify.sectionDetail'), 'info')
   persistWorkspaceState()
 }
 
@@ -744,7 +907,7 @@ const focusRepositoryInput = async () => {
 const startNewAnalysis = async () => {
   activeSection.value = 'repository'
   analysisError.value = ''
-  notifyWorkspace('New analysis ready', 'Repository field selected. Paste a GitHub URL and run analysis.', 'info')
+  notifyWorkspace(t('notify.newAnalysis'), t('notify.newAnalysisDetail'), 'info')
   persistWorkspaceState()
   await focusRepositoryInput()
 }
@@ -758,7 +921,7 @@ const selectRecentAnalysis = async (repository: string) => {
 
   repoUrl.value = `github.com/${repository}`
   activeSection.value = 'repository'
-  notifyWorkspace('Recent analysis selected', `${repository} is ready to run again.`, 'info')
+  notifyWorkspace(t('notify.recentSelected'), t('notify.recentSelectedDetail', { repository }), 'info')
   await focusRepositoryInput()
 }
 
@@ -891,7 +1054,7 @@ const restoreWorkspaceByRepository = (repository: string) => {
   }
 
   applyWorkspaceSnapshot(snapshot)
-  notifyWorkspace('Workspace restored', `${repository} analysis state was loaded from this browser.`, 'success')
+  notifyWorkspace(t('notify.workspaceRestored'), t('notify.workspaceRestoredDetail', { repository }), 'success')
 
   return true
 }
@@ -916,7 +1079,7 @@ const buildRecentAnalysisEntry = (): RecentAnalysis => {
     score: repositoryHealthScore.value,
     healthLabel: repositoryHealthLabel.value,
     analyzedAt: formatRecentAnalysisTime(new Date()),
-    meta: `${(repository?.fileCount ?? 1842).toLocaleString('en-US')} files - ${formatLoc(repository?.estimatedLoc ?? 612000)} LOC`
+    meta: `${formatNumber(repository?.fileCount ?? 1842)} ${t('common.files').toLowerCase()} - ${formatLoc(repository?.estimatedLoc ?? 612000)} ${t('common.loc')}`
   }
 }
 
@@ -942,8 +1105,8 @@ const stopAnalysisProgress = (completed = true) => {
 const toggleWorkspaceSetting = (key: WorkspaceSettingKey) => {
   workspaceSettings[key] = !workspaceSettings[key]
   notifyWorkspace(
-    workspaceSettings[key] ? 'Setting enabled' : 'Setting disabled',
-    settingsToggles.value.find((setting) => setting.key === key)?.label ?? 'Workspace preference updated',
+    workspaceSettings[key] ? t('notify.settingEnabled') : t('notify.settingDisabled'),
+    settingsToggles.value.find((setting) => setting.key === key)?.label ?? t('notify.preferenceUpdated'),
     'success'
   )
   persistWorkspaceState()
@@ -955,7 +1118,7 @@ const openPullRequestReview = (pullRequest: PullRequest) => {
   }
 
   changeSection('pr-review')
-  notifyWorkspace('Pull request selected', `${pullRequest.id} is ready for review.`, 'info')
+  notifyWorkspace(t('notify.prSelected'), t('notify.prSelectedDetail', { id: pullRequest.id }), 'info')
 }
 
 const handleWorkspaceSetupAction = async (id: string) => {
@@ -1030,7 +1193,10 @@ const exportCurrentReport = (format: 'markdown' | 'json' = 'markdown') => {
   link.remove()
   URL.revokeObjectURL(url)
   lastReportExportedAt.value = formatRecentAnalysisTime(new Date())
-  notifyWorkspace('Report exported', `${repositoryName.value} ${isJson ? 'JSON' : 'Markdown'} report downloaded.`, 'success')
+  notifyWorkspace(t('notify.reportExported'), t('notify.reportExportedDetail', {
+    format: isJson ? 'JSON' : 'Markdown',
+    repository: repositoryName.value
+  }), 'success')
   persistWorkspaceState()
 }
 
@@ -1038,10 +1204,10 @@ const copyCurrentReport = async () => {
   try {
     await navigator.clipboard.writeText(reportMarkdown.value)
     lastReportExportedAt.value = formatRecentAnalysisTime(new Date())
-    notifyWorkspace('Report copied', 'Markdown report is ready in clipboard.', 'success')
+    notifyWorkspace(t('notify.reportCopied'), t('notify.reportCopiedDetail'), 'success')
     persistWorkspaceState()
   } catch {
-    notifyWorkspace('Copy failed', 'Browser clipboard access was not available.', 'warning')
+    notifyWorkspace(t('notify.copyFailed'), t('notify.copyFailedDetail'), 'warning')
   }
 }
 
@@ -1066,7 +1232,7 @@ const clearWorkspace = () => {
     window.localStorage.removeItem(WORKSPACE_STORAGE_KEY)
   }
 
-  notifyWorkspace('Workspace cleared', 'Local active analysis was reset. Saved archive remains available.', 'info')
+  notifyWorkspace(t('notify.workspaceCleared'), t('notify.workspaceClearedDetail'), 'info')
 }
 
 function createSavedReference(reference: SourceReference, priority: SavedReferencePriority = 'Watch'): SavedReference {
@@ -1082,7 +1248,7 @@ const saveSourceReference = (reference: SourceReference) => {
   const existing = savedReferences.value.find((savedReference) => savedReference.file === reference.file)
 
   if (existing) {
-    notifyWorkspace('Reference already saved', `${reference.file} is in Bookmarks.`, 'info')
+    notifyWorkspace(t('notify.referenceAlreadySaved'), t('notify.referenceAlreadySavedDetail', { file: reference.file }), 'info')
     changeSection('bookmarks')
 
     return
@@ -1096,13 +1262,13 @@ const saveSourceReference = (reference: SourceReference) => {
     createSavedReference(reference, priority),
     ...savedReferences.value
   ].slice(0, 12)
-  notifyWorkspace('Reference saved', `${reference.file} added to Bookmarks.`, 'success')
+  notifyWorkspace(t('notify.referenceSaved'), t('notify.referenceSavedDetail', { file: reference.file }), 'success')
   persistWorkspaceState()
 }
 
 const removeSavedReference = (file: string) => {
   savedReferences.value = savedReferences.value.filter((reference) => reference.file !== file)
-  notifyWorkspace('Reference removed', `${file} removed from Bookmarks.`, 'info')
+  notifyWorkspace(t('notify.referenceRemoved'), t('notify.referenceRemovedDetail', { file }), 'info')
   persistWorkspaceState()
 }
 
@@ -1146,7 +1312,7 @@ const askAboutSourceReference = async (reference: SourceReference) => {
   lastMatchedReferences.value = findRelevantReferences(`${reference.file} ${reference.service} ${reference.description}`, sourceReferences.value)
   lastAiConfidence.value = Math.max(58, Math.min(92, 62 + lastMatchedReferences.value.length * 8 - riskSignals.value.length * 2))
   changeSection('ask')
-  notifyWorkspace('Reference question prepared', `${reference.file} is ready in the AI workspace.`, 'info')
+  notifyWorkspace(t('notify.referenceQuestionPrepared'), t('notify.referenceQuestionPreparedDetail', { file: reference.file }), 'info')
   await nextTick()
   document.getElementById('codeatlas-question')?.focus()
 }
@@ -1172,7 +1338,7 @@ const selectAiSessionItem = (item: AiSessionItem) => {
   lastMatchedReferences.value = item.references
   lastAiConfidence.value = item.confidence
   changeSection('ask')
-  notifyWorkspace('AI answer restored', `${item.references.length} source references loaded from session history.`, 'info')
+  notifyWorkspace(t('notify.aiAnswerRestored'), t('notify.aiAnswerRestoredDetail', { count: item.references.length }), 'info')
   persistWorkspaceState()
 }
 
@@ -1185,7 +1351,7 @@ const askSuggestedQuestion = async (prompt: string) => {
 
 const clearAiSessionHistory = () => {
   aiSessionHistory.value = []
-  notifyWorkspace('AI session cleared', 'Question history was removed from this workspace.', 'info')
+  notifyWorkspace(t('notify.aiSessionCleared'), t('notify.aiSessionClearedDetail'), 'info')
   persistWorkspaceState()
 }
 
@@ -1195,7 +1361,7 @@ const askAboutArchitectureNode = async (node: { label: string; detail: string })
   lastMatchedReferences.value = findRelevantReferences(`${node.label} ${node.detail}`, sourceReferences.value)
   lastAiConfidence.value = Math.max(58, Math.min(92, 62 + lastMatchedReferences.value.length * 8 - riskSignals.value.length * 2))
   changeSection('ask')
-  notifyWorkspace('Node question prepared', `${node.label} is ready in the AI workspace.`, 'info')
+  notifyWorkspace(t('notify.nodeQuestionPrepared'), t('notify.nodeQuestionPreparedDetail', { node: node.label }), 'info')
   await nextTick()
   document.getElementById('codeatlas-question')?.focus()
 }
@@ -1255,15 +1421,15 @@ const analyzeRepository = async () => {
       aiQuestionError.value = ''
     }
     answer.value = result.answer
-    lastAnalyzedAt.value = `Completed just now - ${result.repository.fileCount.toLocaleString('en-US')} files - ${formatLoc(result.repository.estimatedLoc)} LOC`
+    lastAnalyzedAt.value = `Completed just now - ${formatNumber(result.repository.fileCount)} ${t('common.files').toLowerCase()} - ${formatLoc(result.repository.estimatedLoc)} ${t('common.loc')}`
     recordRecentAnalysis()
-    notifyWorkspace('Repository analysis complete', `${result.repository.fullName} is ready.`, 'success')
+    notifyWorkspace(t('notify.analysisComplete'), t('notify.analysisCompleteDetail', { repository: result.repository.fullName }), 'success')
     persistWorkspaceState()
     succeeded = true
   } catch (error) {
     analysisError.value = getErrorMessage(error)
     lastAnalyzedAt.value = 'Analysis failed'
-    notifyWorkspace('Repository analysis failed', analysisError.value, 'danger')
+    notifyWorkspace(t('notify.analysisFailed'), analysisError.value, 'danger')
     persistWorkspaceState()
   } finally {
     isAnalyzing.value = false
@@ -1292,11 +1458,11 @@ const reviewPullRequest = async () => {
           })
         )
 
-    notifyWorkspace('Pull request review complete', `${prReview.value.repositoryFullName} ${prReview.value.id} is ready.`, 'success')
+    notifyWorkspace(t('notify.prComplete'), t('notify.prCompleteDetail', { repository: prReview.value.repositoryFullName, id: prReview.value.id }), 'success')
     persistWorkspaceState()
   } catch (error) {
     prReviewError.value = getErrorMessage(error)
-    notifyWorkspace('Pull request review failed', prReviewError.value, 'danger')
+    notifyWorkspace(t('notify.prFailed'), prReviewError.value, 'danger')
     persistWorkspaceState()
   } finally {
     isReviewingPr.value = false
@@ -1392,7 +1558,7 @@ const askCodeAtlas = async () => {
       references: lastMatchedReferences.value,
       mode: 'demo'
     })
-    notifyWorkspace('Local answer ready', 'Demo-mode source references were matched.', 'success')
+    notifyWorkspace(t('notify.localAnswerReady'), t('notify.localAnswerReadyDetail'), 'success')
     persistWorkspaceState()
 
     return
@@ -1426,7 +1592,7 @@ const askCodeAtlas = async () => {
       references: lastMatchedReferences.value,
       mode: 'gemini'
     })
-    notifyWorkspace('Gemini answer ready', 'The answer is grounded in current source references.', 'success')
+    notifyWorkspace(t('notify.geminiAnswerReady'), t('notify.geminiAnswerReadyDetail'), 'success')
     persistWorkspaceState()
   } catch (error) {
     aiQuestionError.value = getErrorMessage(error)
@@ -1439,7 +1605,7 @@ const askCodeAtlas = async () => {
       references: lastMatchedReferences.value,
       mode: 'fallback'
     })
-    notifyWorkspace('Gemini fallback shown', aiQuestionError.value, 'warning')
+    notifyWorkspace(t('notify.geminiFallbackShown'), aiQuestionError.value, 'warning')
     persistWorkspaceState()
   } finally {
     isAsking.value = false
@@ -1622,6 +1788,7 @@ function getErrorMessage(error: unknown) {
 }
 
 onMounted(() => {
+  loadUserPreferences()
   loadWorkspaceState()
 
   if (!recentAnalyses.value.length) {
@@ -1635,6 +1802,7 @@ onBeforeUnmount(() => {
   }
 
   stopAnalysisProgress(false)
+  themeMediaQuery?.removeEventListener('change', applyThemePreference)
 })
 </script>
 
@@ -1669,7 +1837,7 @@ onBeforeUnmount(() => {
     <div class="flex min-h-screen flex-col lg:flex-row">
       <AppSidebar
         :active-section="activeSection"
-        :nav-items="navItems"
+        :nav-items="localizedNavItems"
         @change-section="changeSection"
       />
 
@@ -1686,7 +1854,7 @@ onBeforeUnmount(() => {
           @ask="askCodeAtlas"
           @clear-workspace="clearWorkspace"
           @export-report="exportCurrentReport('markdown')"
-          @focus-command="handleUtilityAction('Command focused', 'Type a question and press Enter to ask CodeAtlas.')"
+          @focus-command="handleUtilityAction(t('notify.commandFocused'), t('notify.commandFocusedDetail'))"
           @new-analysis="startNewAnalysis"
           @open-section="changeSection"
         />
@@ -1717,7 +1885,7 @@ onBeforeUnmount(() => {
             <WorkspaceSetupPanel
               :steps="workspaceSetupSteps"
               :saved-workspace-count="savedWorkspaces.length"
-              :last-saved-at="lastWorkspaceSavedAt"
+              :last-saved-at="lastWorkspaceSavedLabel"
               @action="handleWorkspaceSetupAction"
             />
 
@@ -1743,7 +1911,7 @@ onBeforeUnmount(() => {
 
             <section class="atlas-panel overflow-hidden">
               <div class="flex flex-col gap-2 border-b border-atlas-line px-4 py-3 md:flex-row md:items-center md:justify-between">
-                <h3 class="ui-title text-base">Repository snapshot</h3>
+                <h3 class="ui-title text-base">{{ t('repository.snapshot') }}</h3>
                 <span class="ui-span text-xs text-atlas-muted">{{ lastAnalyzedAt }}</span>
               </div>
               <div class="grid grid-cols-1 divide-y divide-atlas-line md:grid-cols-2 md:divide-x md:divide-y-0 xl:grid-cols-4">
@@ -1807,16 +1975,16 @@ onBeforeUnmount(() => {
             <section class="flex flex-col gap-4">
               <section class="atlas-panel overflow-hidden">
                 <div class="border-b border-atlas-line px-4 py-3">
-                  <h3 class="ui-title text-base">Question workspace</h3>
+                  <h3 class="ui-title text-base">{{ t('ask.workspace') }}</h3>
                 </div>
                 <form class="flex flex-col gap-3 px-4 py-4 md:flex-row" :aria-busy="isAsking" @submit.prevent="askCodeAtlas">
-                  <label class="sr-only" for="codeatlas-question">Ask CodeAtlas</label>
+                  <label class="sr-only" for="codeatlas-question">{{ t('ask.label') }}</label>
                   <input
                     id="codeatlas-question"
                     v-model="question"
                     class="atlas-control min-w-0 flex-1"
                     type="search"
-                    placeholder="Where is billing handled?"
+                    :placeholder="t('ask.placeholder')"
                   >
                   <button
                     type="submit"
@@ -1824,11 +1992,11 @@ onBeforeUnmount(() => {
                     :disabled="isAsking"
                   >
                     <span v-if="isAsking" class="ui-span h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white"></span>
-                    <span class="ui-span">{{ isAsking ? 'Asking...' : 'Ask Gemini' }}</span>
+                    <span class="ui-span">{{ isAsking ? t('ask.asking') : t('ask.gemini') }}</span>
                   </button>
                 </form>
                 <div v-if="aiQuestionError" class="mx-4 mb-4 rounded-atlas border border-amber-100 bg-amber-50 px-3 py-2 text-sm leading-5 text-amber-800">
-                  Gemini did not answer in time, so CodeAtlas showed the local source-reference fallback. {{ aiQuestionError }}
+                  {{ t('ask.timeout', { error: aiQuestionError }) }}
                 </div>
                 <div class="border-t border-atlas-line px-4 py-4">
                   <p class="text-sm leading-6 text-atlas-ink">{{ answer }}</p>
@@ -1874,7 +2042,7 @@ onBeforeUnmount(() => {
             />
             <section class="atlas-panel h-fit overflow-hidden">
               <div class="border-b border-atlas-line px-4 py-3">
-                <h3 class="ui-title text-base">Review checklist</h3>
+                <h3 class="ui-title text-base">{{ t('pr.reviewChecklist') }}</h3>
               </div>
               <div class="space-y-3 px-4 py-4">
                 <div v-for="item in activePullRequestReview.checklist" :key="item" class="flex gap-3 rounded-atlas border border-atlas-border bg-atlas-canvas p-3">
@@ -1889,16 +2057,16 @@ onBeforeUnmount(() => {
             <ObservabilityStrip :metrics="metrics" />
             <section class="atlas-panel overflow-hidden">
               <div class="border-b border-atlas-line px-4 py-3">
-                <h3 class="ui-title text-base">Metric details</h3>
+                <h3 class="ui-title text-base">{{ t('observability.metricDetails') }}</h3>
               </div>
               <div class="overflow-x-auto">
                 <table class="w-full min-w-[620px] text-left text-sm">
                   <thead class="bg-atlas-canvas text-xs font-medium text-atlas-muted">
                     <tr>
-                      <th class="border-b border-atlas-line px-4 py-2 font-medium">Metric</th>
-                      <th class="border-b border-atlas-line px-2 py-2 font-medium">Value</th>
-                      <th class="border-b border-atlas-line px-2 py-2 font-medium">Delta</th>
-                      <th class="border-b border-atlas-line px-2 py-2 font-medium">Trend</th>
+                      <th class="border-b border-atlas-line px-4 py-2 font-medium">{{ t('observability.metric') }}</th>
+                      <th class="border-b border-atlas-line px-2 py-2 font-medium">{{ t('common.value') }}</th>
+                      <th class="border-b border-atlas-line px-2 py-2 font-medium">{{ t('observability.delta') }}</th>
+                      <th class="border-b border-atlas-line px-2 py-2 font-medium">{{ t('observability.trend') }}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1922,8 +2090,8 @@ onBeforeUnmount(() => {
             <section class="atlas-panel overflow-hidden">
               <div class="flex flex-col gap-3 border-b border-atlas-line px-4 py-3 md:flex-row md:items-center md:justify-between">
                 <div>
-                  <h3 class="ui-title text-base">Saved references</h3>
-                  <p class="mt-1 text-xs leading-5 text-atlas-muted">Pin files, write review notes, and open source-grounded AI questions from one place.</p>
+                  <h3 class="ui-title text-base">{{ t('bookmarks.savedReferences') }}</h3>
+                  <p class="mt-1 text-xs leading-5 text-atlas-muted">{{ t('bookmarks.detail') }}</p>
                 </div>
                 <span class="ui-span w-fit rounded-full bg-atlas-canvas px-2 py-0.5 text-xs font-semibold text-atlas-muted">{{ bookmarkedReferences.length }}</span>
               </div>
@@ -1941,7 +2109,7 @@ onBeforeUnmount(() => {
                       @change="handleSavedReferencePriorityInput(reference.file, $event)"
                     >
                       <option v-for="priority in SAVED_REFERENCE_PRIORITIES" :key="priority" :value="priority">
-                        {{ priority }}
+                        {{ savedReferencePriorityLabel(priority) }}
                       </option>
                     </select>
                   </div>
@@ -1950,14 +2118,14 @@ onBeforeUnmount(() => {
                     <span class="ui-span rounded border border-atlas-border bg-white px-2 py-1">{{ reference.type }}</span>
                     <span class="ui-span rounded border border-atlas-border bg-white px-2 py-1">{{ reference.loc }} LOC</span>
                     <span class="ui-span rounded border border-atlas-border bg-white px-2 py-1">
-                      {{ savedReferenceFiles.includes(reference.file) ? `Saved ${reference.savedAt}` : 'Suggested' }}
+                      {{ savedReferenceFiles.includes(reference.file) ? t('bookmarks.savedAt', { time: reference.savedAt }) : t('bookmarks.suggested') }}
                     </span>
                   </div>
                   <textarea
                     class="atlas-control mt-3 min-h-20 w-full py-2 leading-5 disabled:bg-atlas-canvas disabled:text-atlas-muted"
                     :value="reference.note"
                     :disabled="!savedReferenceFiles.includes(reference.file)"
-                    placeholder="Add why this file matters..."
+                    :placeholder="t('bookmarks.notePlaceholder')"
                     @input="handleSavedReferenceNoteInput(reference.file, $event)"
                   ></textarea>
                   <div class="mt-3 flex flex-wrap gap-2">
@@ -1966,7 +2134,7 @@ onBeforeUnmount(() => {
                       class="ui-button h-9 border-atlas-border bg-white px-3 text-xs text-atlas-ink hover:border-atlas-accent hover:text-atlas-accent"
                       @click="askAboutSourceReference(reference)"
                     >
-                      <span class="ui-span">Ask about file</span>
+                      <span class="ui-span">{{ t('bookmarks.askFile') }}</span>
                     </button>
                     <button
                       v-if="savedReferenceFiles.includes(reference.file)"
@@ -1974,7 +2142,7 @@ onBeforeUnmount(() => {
                       class="ui-button h-9 border-atlas-border bg-white px-3 text-xs text-atlas-muted hover:border-atlas-danger hover:text-atlas-danger"
                       @click="removeSavedReference(reference.file)"
                     >
-                      <span class="ui-span">Remove</span>
+                      <span class="ui-span">{{ t('bookmarks.remove') }}</span>
                     </button>
                     <button
                       v-else
@@ -1982,7 +2150,7 @@ onBeforeUnmount(() => {
                       class="ui-button h-9 border-atlas-accent bg-atlas-accent px-3 text-xs text-white hover:bg-atlas-accentDark"
                       @click="saveSourceReference(reference)"
                     >
-                      <span class="ui-span">Save to workspace</span>
+                      <span class="ui-span">{{ t('bookmarks.saveWorkspace') }}</span>
                     </button>
                   </div>
                 </article>
@@ -1991,7 +2159,7 @@ onBeforeUnmount(() => {
 
             <section class="atlas-panel h-fit overflow-hidden">
               <div class="border-b border-atlas-line px-4 py-3">
-                <h3 class="ui-title text-base">PR watchlist</h3>
+                <h3 class="ui-title text-base">{{ t('bookmarks.watchlist') }}</h3>
               </div>
               <div class="divide-y divide-atlas-line">
                 <button
@@ -2003,7 +2171,7 @@ onBeforeUnmount(() => {
                 >
                   <span class="ui-span min-w-0">
                     <span class="ui-span block truncate text-sm font-semibold text-atlas-ink">{{ pullRequest.id }} {{ pullRequest.title }}</span>
-                    <span class="ui-span mt-1 block text-xs text-atlas-muted">{{ pullRequest.changedFiles }} files, checks {{ pullRequest.checks }}</span>
+                    <span class="ui-span mt-1 block text-xs text-atlas-muted">{{ t('bookmarks.prMeta', { files: pullRequest.changedFiles, checks: pullRequest.checks }) }}</span>
                   </span>
                   <span class="ui-span rounded px-2 py-1 text-xs font-semibold" :class="pullRequest.risk === 'High' ? 'bg-red-50 text-atlas-danger' : pullRequest.risk === 'Medium' ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'">
                     {{ pullRequest.risk }}
@@ -2017,8 +2185,8 @@ onBeforeUnmount(() => {
             <section class="atlas-panel overflow-hidden">
               <div class="flex flex-col gap-3 border-b border-atlas-line px-4 py-3 md:flex-row md:items-center md:justify-between">
                 <div>
-                  <h3 class="ui-title text-base">Report center</h3>
-                  <p class="mt-1 text-xs text-atlas-muted">Export a portfolio-ready package from the current workspace.</p>
+                  <h3 class="ui-title text-base">{{ t('reports.center') }}</h3>
+                  <p class="mt-1 text-xs text-atlas-muted">{{ t('reports.detail') }}</p>
                 </div>
                 <div class="flex flex-wrap gap-2">
                   <button
@@ -2026,21 +2194,21 @@ onBeforeUnmount(() => {
                     class="ui-button h-9 border-atlas-accent bg-atlas-accent px-3 text-xs text-white shadow-instrument hover:bg-atlas-accentDark"
                     @click="exportCurrentReport('markdown')"
                   >
-                    <span class="ui-span">Export Markdown</span>
+                    <span class="ui-span">{{ t('reports.exportMarkdown') }}</span>
                   </button>
                   <button
                     type="button"
                     class="ui-button h-9 border-atlas-border bg-white px-3 text-xs text-atlas-ink hover:border-atlas-accent hover:text-atlas-accent"
                     @click="exportCurrentReport('json')"
                   >
-                    <span class="ui-span">Export JSON</span>
+                    <span class="ui-span">{{ t('reports.exportJson') }}</span>
                   </button>
                   <button
                     type="button"
                     class="ui-button h-9 border-atlas-border bg-white px-3 text-xs text-atlas-ink hover:border-atlas-accent hover:text-atlas-accent"
                     @click="copyCurrentReport"
                   >
-                    <span class="ui-span">Copy report</span>
+                    <span class="ui-span">{{ t('reports.copy') }}</span>
                   </button>
                 </div>
               </div>
@@ -2048,18 +2216,18 @@ onBeforeUnmount(() => {
                 <table class="w-full min-w-[620px] text-left text-sm">
                   <thead class="bg-atlas-canvas text-xs font-medium text-atlas-muted">
                     <tr>
-                      <th class="border-b border-atlas-line px-4 py-2 font-medium">Report</th>
-                      <th class="border-b border-atlas-line px-2 py-2 font-medium">Status</th>
-                      <th class="border-b border-atlas-line px-2 py-2 font-medium">Scope</th>
-                      <th class="border-b border-atlas-line px-2 py-2 font-medium">Updated</th>
+                      <th class="border-b border-atlas-line px-4 py-2 font-medium">{{ t('reports.report') }}</th>
+                      <th class="border-b border-atlas-line px-2 py-2 font-medium">{{ t('common.status') }}</th>
+                      <th class="border-b border-atlas-line px-2 py-2 font-medium">{{ t('reports.scope') }}</th>
+                      <th class="border-b border-atlas-line px-2 py-2 font-medium">{{ t('common.updated') }}</th>
                     </tr>
                   </thead>
                   <tbody>
                     <tr v-for="report in reportRows" :key="report.name" class="border-b border-atlas-line last:border-0">
                       <td class="px-4 py-3 font-medium text-atlas-ink">{{ report.name }}</td>
                       <td class="px-2 py-3">
-                        <span class="ui-span rounded px-2 py-1 text-xs font-semibold" :class="report.status === 'Ready' ? 'bg-emerald-50 text-emerald-700' : report.status === 'Needs review' ? 'bg-amber-50 text-amber-700' : 'bg-red-50 text-atlas-danger'">
-                          {{ report.status }}
+                        <span class="ui-span rounded px-2 py-1 text-xs font-semibold" :class="report.status === 'ready' ? 'bg-emerald-50 text-emerald-700' : report.status === 'review' ? 'bg-amber-50 text-amber-700' : 'bg-red-50 text-atlas-danger'">
+                          {{ report.statusLabel }}
                         </span>
                       </td>
                       <td class="px-2 py-3 text-atlas-muted">{{ report.scope }}</td>
@@ -2069,7 +2237,7 @@ onBeforeUnmount(() => {
                 </table>
               </div>
               <div class="border-t border-atlas-line bg-atlas-canvas px-4 py-3 text-xs leading-5 text-atlas-muted">
-                Last export: {{ lastReportExportedAt }}. Reports include health score, architecture nodes, source citations, risks, and PR review.
+                {{ t('reports.lastExport', { time: lastReportExportedAt === 'Not exported yet' ? t('status.notExported') : lastReportExportedAt }) }}
               </div>
             </section>
 
@@ -2096,33 +2264,64 @@ onBeforeUnmount(() => {
           </section>
 
           <section v-else class="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(320px,420px)]">
-            <section class="atlas-panel overflow-hidden">
-              <div class="border-b border-atlas-line px-4 py-3">
-                <h3 class="ui-title text-base">Workspace settings</h3>
-              </div>
-              <div class="divide-y divide-atlas-line">
-                <div v-for="setting in settingsToggles" :key="setting.key" class="flex flex-col gap-3 px-4 py-4 md:flex-row md:items-center md:justify-between">
-                  <div>
-                    <p class="font-semibold text-atlas-ink">{{ setting.label }}</p>
-                    <p class="mt-1 text-sm leading-5 text-atlas-muted">{{ setting.detail }}</p>
-                  </div>
-                  <button
-                    type="button"
-                    class="ui-button h-8 w-14 justify-start rounded-full border-atlas-border px-1"
-                    :class="setting.enabled ? 'bg-atlas-accent' : 'bg-atlas-canvas'"
-                    :aria-label="`${setting.enabled ? 'Disable' : 'Enable'} ${setting.label}`"
-                    :aria-pressed="setting.enabled"
-                    @click="toggleWorkspaceSetting(setting.key)"
-                  >
-                    <span class="ui-span h-6 w-6 rounded-full bg-white shadow-sm transition" :class="setting.enabled ? 'translate-x-6' : 'translate-x-0'"></span>
-                  </button>
+            <div class="flex flex-col gap-4">
+              <section class="atlas-panel overflow-hidden">
+                <div class="border-b border-atlas-line px-4 py-3">
+                  <h3 class="ui-title text-base">{{ t('settings.preferences') }}</h3>
+                  <p class="mt-1 text-xs leading-5 text-atlas-muted">{{ t('settings.preferencesDetail') }}</p>
                 </div>
-              </div>
-            </section>
+                <div class="grid gap-4 px-4 py-4 md:grid-cols-2">
+                  <label class="grid gap-2">
+                    <span class="ui-span text-sm font-semibold text-atlas-ink">{{ t('settings.interfaceLanguage') }}</span>
+                    <select class="atlas-control h-11" :value="locale" @change="handleLocaleInput">
+                      <option v-for="option in localeOptions" :key="option.code" :value="option.code">
+                        {{ option.nativeLabel }} / {{ option.shortLabel }}
+                      </option>
+                    </select>
+                  </label>
+                  <label class="grid gap-2">
+                    <span class="ui-span text-sm font-semibold text-atlas-ink">{{ t('settings.themeMode') }}</span>
+                    <select class="atlas-control h-11" :value="themePreference" @change="handleThemeInput">
+                      <option v-for="option in themeOptions" :key="option.code" :value="option.code">
+                        {{ t(option.labelKey) }}
+                      </option>
+                    </select>
+                  </label>
+                </div>
+                <div class="border-t border-atlas-line bg-atlas-canvas px-4 py-3">
+                  <span class="ui-span text-sm font-semibold text-atlas-ink">{{ activeThemeLabel }}</span>
+                  <p class="mt-1 text-xs leading-5 text-atlas-muted">{{ t('theme.systemHint') }}</p>
+                </div>
+              </section>
+
+              <section class="atlas-panel overflow-hidden">
+                <div class="border-b border-atlas-line px-4 py-3">
+                  <h3 class="ui-title text-base">{{ t('settings.workspace') }}</h3>
+                </div>
+                <div class="divide-y divide-atlas-line">
+                  <div v-for="setting in settingsToggles" :key="setting.key" class="flex flex-col gap-3 px-4 py-4 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <p class="font-semibold text-atlas-ink">{{ setting.label }}</p>
+                      <p class="mt-1 text-sm leading-5 text-atlas-muted">{{ setting.detail }}</p>
+                    </div>
+                    <button
+                      type="button"
+                      class="ui-button h-8 w-14 justify-start rounded-full border-atlas-border px-1"
+                      :class="setting.enabled ? 'bg-atlas-accent' : 'bg-atlas-canvas'"
+                      :aria-label="setting.enabled ? t('settings.disable', { label: setting.label }) : t('settings.enable', { label: setting.label })"
+                      :aria-pressed="setting.enabled"
+                      @click="toggleWorkspaceSetting(setting.key)"
+                    >
+                      <span class="ui-span h-6 w-6 rounded-full bg-white shadow-sm transition" :class="setting.enabled ? 'translate-x-6' : 'translate-x-0'"></span>
+                    </button>
+                  </div>
+                </div>
+              </section>
+            </div>
 
             <section class="atlas-panel h-fit overflow-hidden">
               <div class="border-b border-atlas-line px-4 py-3">
-                <h3 class="ui-title text-base">Workspace state</h3>
+                <h3 class="ui-title text-base">{{ t('settings.state') }}</h3>
               </div>
               <div class="divide-y divide-atlas-line">
                 <div v-for="row in settingsRows" :key="row.label" class="flex items-center justify-between gap-4 px-4 py-3">

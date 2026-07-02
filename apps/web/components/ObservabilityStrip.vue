@@ -6,6 +6,7 @@ defineProps<{
 }>()
 
 const range = ref('7D')
+const { t } = useCodeAtlasI18n()
 
 const showAllMetrics = () => {
   range.value = '30D'
@@ -34,15 +35,15 @@ const sparklinePath = (points: number[]) => {
   <section class="atlas-panel overflow-hidden">
     <div class="flex items-center justify-between border-b border-atlas-line px-4 py-3">
       <div class="flex items-center gap-3">
-        <h2 class="ui-title text-base">Observability</h2>
-        <select v-model="range" class="atlas-control h-8 w-20 text-xs" aria-label="Metric range">
+        <h2 class="ui-title text-base">{{ t('observability.title') }}</h2>
+        <select v-model="range" class="atlas-control h-8 w-20 text-xs" :aria-label="t('observability.range')">
           <option>7D</option>
           <option>14D</option>
           <option>30D</option>
         </select>
       </div>
       <button type="button" class="ui-button h-8 text-atlas-accent hover:text-atlas-accentDark" @click="showAllMetrics">
-        <span class="ui-span">View all metrics</span>
+        <span class="ui-span">{{ t('observability.viewAll') }}</span>
         <span class="ui-span">&gt;</span>
       </button>
     </div>
@@ -63,7 +64,7 @@ const sparklinePath = (points: number[]) => {
           <path
             :d="sparklinePath(metric.points)"
             fill="none"
-            :stroke="metric.tone === 'good' ? '#007a68' : '#d92d20'"
+            :stroke="metric.tone === 'good' ? 'rgb(var(--atlas-accent))' : 'rgb(var(--atlas-danger))'"
             stroke-width="2"
             stroke-linecap="round"
             stroke-linejoin="round"

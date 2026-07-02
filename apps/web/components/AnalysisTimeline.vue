@@ -25,13 +25,14 @@ const rowClass: Record<AnalysisStep['status'], string> = {
 }
 
 const stepDurations = ['2m 14s', '3m 21s', '4m 07s', '1m 12s', '45s']
+const { t } = useCodeAtlasI18n()
 </script>
 
 <template>
   <section class="atlas-panel overflow-hidden">
     <div class="flex items-center justify-between gap-3 border-b border-atlas-line px-4 py-3">
       <div>
-        <h2 class="ui-title text-base">Analysis timeline</h2>
+        <h2 class="ui-title text-base">{{ t('timeline.title') }}</h2>
         <p class="mt-1 text-xs text-atlas-muted">{{ updatedAt }}</p>
       </div>
       <span
@@ -39,7 +40,7 @@ const stepDurations = ['2m 14s', '3m 21s', '4m 07s', '1m 12s', '45s']
         :class="isBusy ? 'border-atlas-warning bg-amber-50 text-amber-700' : 'border-emerald-100 bg-emerald-50 text-atlas-success'"
       >
         <span class="ui-span h-1.5 w-1.5 rounded-full" :class="isBusy ? 'animate-pulse bg-atlas-warning' : 'bg-atlas-success'"></span>
-        {{ isBusy ? 'Running' : 'Ready' }}
+        {{ isBusy ? t('timeline.running') : t('timeline.ready') }}
       </span>
     </div>
 
@@ -76,7 +77,7 @@ const stepDurations = ['2m 14s', '3m 21s', '4m 07s', '1m 12s', '45s']
       </div>
       <div v-if="!isBusy" class="mt-4 flex items-center gap-3 rounded-atlas border border-atlas-line bg-atlas-canvas px-3 py-3">
         <span class="ui-span h-2 w-2 rounded-full bg-atlas-success"></span>
-        <p class="text-sm leading-5 text-atlas-muted">Repository intelligence is ready for source-grounded questions and review workflows.</p>
+        <p class="text-sm leading-5 text-atlas-muted">{{ t('timeline.readyDetail') }}</p>
       </div>
     </div>
   </section>

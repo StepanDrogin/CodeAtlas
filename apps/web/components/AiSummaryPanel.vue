@@ -18,6 +18,7 @@ const props = withDefaults(defineProps<{
 const copyState = ref<'idle' | 'copied' | 'failed'>('idle')
 const answerRating = ref<'useful' | 'not-useful' | null>(null)
 const copyTimer = ref<ReturnType<typeof setTimeout> | null>(null)
+const { t } = useCodeAtlasI18n()
 
 const toneClass: Record<SummaryItem['tone'], string> = {
   neutral: 'text-atlas-info',
@@ -28,15 +29,15 @@ const toneClass: Record<SummaryItem['tone'], string> = {
 
 const evidenceReferences = computed(() => props.references.slice(0, 3))
 const contextReferences = computed(() => (props.contextReferences.length ? props.contextReferences : evidenceReferences.value).slice(0, 4))
-const confidenceLabel = computed(() => `${Math.max(0, Math.min(Math.round(props.confidence), 100))}% confidence`)
+const confidenceLabel = computed(() => t('ai.confidence', { value: Math.max(0, Math.min(Math.round(props.confidence), 100)) }))
 const nextSteps = computed(() => {
   const risk = props.summaryItems.find((item) => item.tone === 'risk')
   const opportunity = props.summaryItems.find((item) => item.tone === 'opportunity')
 
   return [
-    risk ? `Verify: ${risk.text}` : 'Verify core repository flows against current source references.',
-    opportunity ? `Improve: ${opportunity.text}` : 'Ask CodeAtlas for the next source file to inspect.',
-    'Open PR Review for changed-file risk before merging large updates.'
+    risk ? t('ai.verifyPrefix', { text: risk.text }) : t('ai.verifyFallback'),
+    opportunity ? t('ai.improvePrefix', { text: opportunity.text }) : t('ai.improveFallback'),
+    t('ai.openPrFallback')
   ]
 })
 
@@ -68,8 +69,8 @@ onBeforeUnmount(() => {
   <section class="atlas-panel flex h-full flex-col">
     <div class="flex items-center justify-between border-b border-atlas-line px-4 py-3">
       <div class="flex items-center gap-3">
-        <h2 class="ui-title text-base">AI summary</h2>
-        <span class="ui-span rounded-full bg-violet-50 px-2.5 py-1 text-xs font-semibold text-atlas-violet">Grounded</span>
+        <h2 class="ui-title text-base">{{ t('ai.summary') }}</h2>
+        <span class="ui-span rounded-full bg-violet-50 px-2.5 py-1 text-xs font-semibold text-atlas-violet">{{ t('ai.grounded') }}</span>
       </div>
       <button
         type="button"
@@ -77,13 +78,13 @@ onBeforeUnmount(() => {
         :class="copyState === 'copied' ? 'border-atlas-success text-atlas-success' : copyState === 'failed' ? 'border-atlas-danger text-atlas-danger' : ''"
         @click="copyAnswer"
       >
-        <span class="ui-span">{{ copyState === 'copied' ? 'Copied' : copyState === 'failed' ? 'Retry' : 'Copy' }}</span>
+        <span class="ui-span">{{ copyState === 'copied' ? t('common.copied') : copyState === 'failed' ? t('common.retry') : t('common.copy') }}</span>
       </button>
     </div>
     <div class="flex flex-1 flex-col gap-4 px-4 py-4">
       <div class="rounded-atlas border border-atlas-line bg-atlas-canvas/80 px-4 py-4">
         <div v-if="question" class="mb-3 rounded-atlas border border-atlas-border bg-white px-3 py-2 text-xs leading-5 text-atlas-muted">
-          <span class="ui-span font-semibold text-atlas-ink">Question:</span>
+          <span class="ui-span font-semibold text-atlas-ink">{{ t('ai.question') }}</span>
           {{ question }}
         </div>
         <p class="text-sm leading-6 text-atlas-ink">
@@ -92,7 +93,7 @@ onBeforeUnmount(() => {
       </div>
       <div v-if="contextReferences.length" class="rounded-atlas border border-atlas-line bg-white">
         <div class="flex items-center justify-between border-b border-atlas-line px-3 py-2">
-          <h3 class="ui-title text-sm">Context used</h3>
+          <h3 class="ui-title text-sm">{{ t('ai.contextUsed') }}</h3>
           <span class="ui-span rounded bg-atlas-rail px-2 py-0.5 text-xs font-semibold text-atlas-accent">{{ confidenceLabel }}</span>
         </div>
         <div class="divide-y divide-atlas-line">
@@ -118,8 +119,8 @@ onBeforeUnmount(() => {
       </div>
       <div v-if="evidenceReferences.length" class="rounded-atlas border border-atlas-line bg-white">
         <div class="flex items-center justify-between border-b border-atlas-line px-3 py-2">
-          <h3 class="ui-title text-sm">Grounded sources</h3>
-          <span class="ui-span text-xs text-atlas-muted">{{ evidenceReferences.length }} references</span>
+          <h3 class="ui-title text-sm">{{ t('ai.groundedSources') }}</h3>
+          <span class="ui-span text-xs text-atlas-muted">{{ t('ai.referencesCount', { count: evidenceReferences.length }) }}</span>
         </div>
         <div class="divide-y divide-atlas-line">
           <article v-for="reference in evidenceReferences" :key="reference.file" class="px-3 py-2">
@@ -132,7 +133,7 @@ onBeforeUnmount(() => {
         </div>
       </div>
       <div class="rounded-atlas border border-atlas-line bg-white px-3 py-3">
-        <h3 class="ui-title text-sm">Top recommendations</h3>
+        <h3 class="ui-title text-sm">{{ t('ai.topRecommendations') }}</h3>
         <div class="mt-3 space-y-2">
           <div v-for="step in nextSteps" :key="step" class="flex gap-2 text-xs leading-5 text-atlas-muted">
             <span class="ui-span mt-0.5 text-atlas-success">OK</span>
@@ -141,13 +142,13 @@ onBeforeUnmount(() => {
         </div>
       </div>
       <div class="mt-auto flex items-center justify-between pt-2 text-xs text-atlas-muted">
-        <span class="ui-span">Generated by CodeAtlas analysis</span>
+        <span class="ui-span">{{ t('ai.generatedBy') }}</span>
         <div class="flex gap-2">
           <button
             type="button"
             class="ui-button h-8 w-8 border-atlas-border bg-white text-atlas-muted hover:text-atlas-accent"
             :class="answerRating === 'useful' ? 'border-atlas-accent bg-atlas-rail text-atlas-accent' : ''"
-            aria-label="Mark useful"
+            :aria-label="t('ai.markUseful')"
             :aria-pressed="answerRating === 'useful'"
             @click="answerRating = answerRating === 'useful' ? null : 'useful'"
           >
@@ -157,7 +158,7 @@ onBeforeUnmount(() => {
             type="button"
             class="ui-button h-8 w-8 border-atlas-border bg-white text-atlas-muted hover:text-atlas-danger"
             :class="answerRating === 'not-useful' ? 'border-atlas-danger bg-red-50 text-atlas-danger' : ''"
-            aria-label="Mark not useful"
+            :aria-label="t('ai.markNotUseful')"
             :aria-pressed="answerRating === 'not-useful'"
             @click="answerRating = answerRating === 'not-useful' ? null : 'not-useful'"
           >

@@ -15,6 +15,7 @@ defineEmits<{
 
 const search = ref('')
 const activeType = ref('All')
+const { t } = useCodeAtlasI18n()
 
 const filterTypes = computed(() => ['All', ...Array.from(new Set(props.references.map((reference) => reference.type)))])
 const savedFileSet = computed(() => new Set(props.savedFiles))
@@ -43,7 +44,7 @@ const showAllFiles = () => {
 <template>
   <section class="atlas-panel overflow-hidden">
     <div class="flex flex-col gap-3 border-b border-atlas-line px-4 py-3 md:flex-row md:items-center md:justify-between">
-      <h2 class="ui-title text-base">Source references</h2>
+      <h2 class="ui-title text-base">{{ t('sources.title') }}</h2>
       <div class="flex flex-wrap items-center gap-2">
         <button
           v-for="type in filterTypes"
@@ -53,9 +54,9 @@ const showAllFiles = () => {
           :class="activeType === type ? 'bg-atlas-rail text-atlas-accent' : 'border-atlas-border bg-white text-atlas-muted hover:text-atlas-ink'"
           @click="activeType = type"
         >
-          <span class="ui-span">{{ type }}</span>
+          <span class="ui-span">{{ type === 'All' ? t('common.all') : type }}</span>
         </button>
-        <input v-model="search" class="atlas-control h-8 w-full text-xs sm:w-44" type="search" placeholder="Search files...">
+        <input v-model="search" class="atlas-control h-8 w-full text-xs sm:w-44" type="search" :placeholder="t('sources.search')">
       </div>
     </div>
 
@@ -63,13 +64,13 @@ const showAllFiles = () => {
       <table class="w-full min-w-[620px] border-collapse text-left text-sm">
         <thead class="bg-atlas-canvas text-xs font-medium text-atlas-muted">
           <tr>
-            <th class="border-b border-atlas-line px-4 py-2 font-medium">File</th>
-            <th class="border-b border-atlas-line px-2 py-2 font-medium">Type</th>
-            <th class="border-b border-atlas-line px-2 py-2 font-medium">Service</th>
-            <th class="border-b border-atlas-line px-2 py-2 font-medium">Description</th>
-            <th class="border-b border-atlas-line px-2 py-2 font-medium">LOC</th>
-            <th class="border-b border-atlas-line px-2 py-2 font-medium">Updated</th>
-            <th class="border-b border-atlas-line px-4 py-2 text-right font-medium">Actions</th>
+            <th class="border-b border-atlas-line px-4 py-2 font-medium">{{ t('common.file') }}</th>
+            <th class="border-b border-atlas-line px-2 py-2 font-medium">{{ t('common.type') }}</th>
+            <th class="border-b border-atlas-line px-2 py-2 font-medium">{{ t('common.service') }}</th>
+            <th class="border-b border-atlas-line px-2 py-2 font-medium">{{ t('sources.tableDescription') }}</th>
+            <th class="border-b border-atlas-line px-2 py-2 font-medium">{{ t('common.loc') }}</th>
+            <th class="border-b border-atlas-line px-2 py-2 font-medium">{{ t('common.updated') }}</th>
+            <th class="border-b border-atlas-line px-4 py-2 text-right font-medium">{{ t('common.actions') }}</th>
           </tr>
         </thead>
         <tbody>
@@ -90,21 +91,21 @@ const showAllFiles = () => {
                   :class="savedFileSet.has(reference.file) ? 'border-atlas-accent bg-atlas-rail text-atlas-accent' : ''"
                   @click="$emit('save', reference)"
                 >
-                  <span class="ui-span">{{ savedFileSet.has(reference.file) ? 'Saved' : 'Save' }}</span>
+                  <span class="ui-span">{{ savedFileSet.has(reference.file) ? t('sources.saved') : t('sources.save') }}</span>
                 </button>
                 <button
                   type="button"
                   class="ui-button h-8 border-atlas-border bg-white px-2 text-xs text-atlas-muted hover:border-atlas-ink hover:text-atlas-ink"
                   @click="$emit('ask', reference)"
                 >
-                  <span class="ui-span">Ask</span>
+                  <span class="ui-span">{{ t('common.ask') }}</span>
                 </button>
               </div>
             </td>
           </tr>
           <tr v-if="!filteredReferences.length">
             <td colspan="7" class="px-4 py-8 text-center text-sm text-atlas-muted">
-              No source references match this filter.
+              {{ t('sources.noMatches') }}
             </td>
           </tr>
         </tbody>
@@ -112,9 +113,9 @@ const showAllFiles = () => {
     </div>
 
     <div class="flex items-center justify-between border-t border-atlas-line px-4 py-3">
-      <span class="ui-span text-sm text-atlas-muted">Showing {{ filteredReferences.length }} of {{ references.length }} indexed references</span>
+      <span class="ui-span text-sm text-atlas-muted">{{ t('sources.showing', { visible: filteredReferences.length, total: references.length }) }}</span>
       <button type="button" class="ui-button h-8 text-atlas-accent hover:text-atlas-accentDark" @click="showAllFiles">
-        <span class="ui-span">View all files</span>
+        <span class="ui-span">{{ t('sources.viewAll') }}</span>
         <span class="ui-span">&gt;</span>
       </button>
     </div>
