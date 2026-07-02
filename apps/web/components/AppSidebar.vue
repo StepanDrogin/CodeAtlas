@@ -12,7 +12,7 @@ defineEmits<{
 </script>
 
 <template>
-  <aside class="flex w-full shrink-0 flex-col border-b border-atlas-border bg-white/92 px-3 py-4 shadow-[12px_0_36px_rgba(16,24,40,0.035)] backdrop-blur lg:min-h-screen lg:w-[252px] lg:border-b-0 lg:border-r">
+  <aside class="flex w-full max-w-full shrink-0 flex-col overflow-hidden border-b border-atlas-border bg-white/92 px-3 py-4 shadow-[12px_0_36px_rgba(16,24,40,0.035)] backdrop-blur lg:min-h-screen lg:w-[252px] lg:border-b-0 lg:border-r">
     <div class="mb-4 flex items-center gap-3 px-2 lg:mb-8">
       <div class="grid h-10 w-10 place-items-center rounded-atlas bg-atlas-accent text-white shadow-instrument">
         <svg aria-hidden="true" class="h-6 w-6" viewBox="0 0 24 24" fill="none">
@@ -24,7 +24,7 @@ defineEmits<{
       <h1 class="ui-title text-[22px]">CodeAtlas</h1>
     </div>
 
-    <nav class="atlas-scrollbar-none flex gap-1 overflow-x-auto pb-1 lg:flex-1 lg:flex-col lg:overflow-visible lg:pb-0">
+    <nav class="atlas-scrollbar-none flex w-full min-w-0 gap-1 overflow-x-auto pb-1 lg:flex-1 lg:flex-col lg:overflow-visible lg:pb-0">
       <button
         v-for="item in navItems"
         :key="item.id"

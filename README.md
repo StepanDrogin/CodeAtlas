@@ -30,6 +30,11 @@ The current MVP uses deterministic analysis over GitHub API data as the reliable
 - Risk signals for missing tests, missing CI, truncated trees, env-like files, and install lifecycle scripts.
 - Observability strip for latency, error rate, requests, token usage, cost, and jobs.
 - Section-based dashboard navigation for repository, architecture, Q&A, PR review, observability, bookmarks, reports, integrations, and settings.
+- Browser-persisted workspace snapshots: active analysis, AI answer, PR review, report state, settings, and recent workspaces restore after reload.
+- Workspace setup checklist for connect, analyze, source-grounded AI, and report export.
+- Markdown and JSON report export from the current repository workspace.
+- AI Q&A evidence context with selected source references and confidence scoring.
+- Architecture node explorer with a one-click "ask about this node" workflow.
 - Optional Gemini-powered repository summaries, Q&A, and PR review refinement through Nuxt server routes.
 - MCP stdio server scaffold for AI coding tools.
 - Composite GitHub Action scaffold for PR review workflows.
@@ -171,6 +176,10 @@ https://github.com/nuxt/nuxt/pull/35489
 Where is app config handled?
 ```
 
+5. Open **Architecture**, select a node, then use **Ask about this node** to prepare a source-grounded AI question.
+6. Open **Reports** and export the current workspace as Markdown or JSON.
+7. Reload the page; the active workspace and recent analysis archive are restored from browser storage.
+
 ## Quality Gates
 
 ```bash
@@ -199,6 +208,25 @@ body: { "question": "Where is routing configured?", "repositoryFullName": "owner
 ```
 
 Repository and PR endpoints use the GitHub REST API and the same `NUXT_GITHUB_TOKEN` runtime config. When `GEMINI_API_KEY` is available, they also ask Gemini to refine dashboard summaries, PR summaries, suggested comments, and command-bar Q&A.
+
+The AI question endpoint returns a UI-ready evidence payload:
+
+```json
+{
+  "answer": "Concise source-grounded answer",
+  "references": [
+    {
+      "file": "apps/web/app.vue",
+      "type": "VUE",
+      "service": "Frontend",
+      "description": "Repository dashboard workspace",
+      "loc": 128,
+      "updated": "Indexed now"
+    }
+  ],
+  "confidence": 82
+}
+```
 
 ## Analyzer Package
 

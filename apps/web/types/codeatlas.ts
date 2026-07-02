@@ -81,3 +81,11 @@ export interface RecentAnalysis {
   analyzedAt: string
   meta: string
 }
+
+export interface WorkspaceSetupStep {
+  id: string
+  label: string
+  detail: string
+  status: 'done' | 'active' | 'pending'
+  action: string
+}

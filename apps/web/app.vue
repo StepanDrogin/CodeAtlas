@@ -18,11 +18,14 @@ import type {
   PullRequestReview,
   RecentAnalysis,
   RepositoryAnalysis,
-  SourceReference
+  SourceReference,
+  WorkspaceSetupStep
 } from '~/types/codeatlas'
 
 interface AiQuestionResponse {
   answer: string
+  references?: SourceReference[]
+  confidence?: number
 }
 
 interface WorkspaceActivity {
@@ -36,9 +39,30 @@ interface ActivityLogItem extends WorkspaceActivity {
   timestamp: string
 }
 
+interface StoredWorkspace {
+  version: 1
+  repository: string
+  repoUrl: string
+  prUrl: string
+  activeSection: NavSection
+  lastAnalyzedAt: string
+  answer: string
+  lastQuestion: string
+  lastAiConfidence: number
+  lastSavedAt: string
+  lastReportExportedAt: string
+  analysis: RepositoryAnalysis | null
+  prReview: PullRequestReview | null
+  recentAnalyses: RecentAnalysis[]
+  activityLog: ActivityLogItem[]
+  settings: Record<WorkspaceSettingKey, boolean>
+}
+
 const CLIENT_REQUEST_TIMEOUT_MS = 25000
 const CANONICAL_URL = 'https://code-atlas-web-kappa.vercel.app/'
 const RECENT_ANALYSES_STORAGE_KEY = 'codeatlas:recent-analyses'
+const WORKSPACE_STORAGE_KEY = 'codeatlas:active-workspace'
+const WORKSPACE_ARCHIVE_STORAGE_KEY = 'codeatlas:workspace-archive'
 const ANALYSIS_TIMELINE_BASE = [
   {
     id: 'connect',
@@ -85,6 +109,12 @@ const recentAction = ref<WorkspaceActivity | null>(null)
 const recentActionTimeout = ref<ReturnType<typeof setTimeout> | null>(null)
 const activityLog = ref<ActivityLogItem[]>([])
 const recentAnalyses = ref<RecentAnalysis[]>([])
+const savedWorkspaces = ref<StoredWorkspace[]>([])
+const lastQuestion = ref('')
+const lastMatchedReferences = ref<SourceReference[]>([])
+const lastAiConfidence = ref(82)
+const lastWorkspaceSavedAt = ref('Not saved yet')
+const lastReportExportedAt = ref('Not exported yet')
 const analysisProgressStep = ref(ANALYSIS_TIMELINE_BASE.length - 1)
 let activityLogId = 0
 let analysisProgressTimer: ReturnType<typeof setInterval> | null = null
@@ -98,6 +128,28 @@ const pullRequests = computed(() => analysis.value?.pullRequests ?? demoPullRequ
 const summaryItems = computed(() => analysis.value?.summaryItems ?? demoSummaryItems)
 const riskSignals = computed(() => analysis.value?.riskSignals ?? demoRiskSignals)
 const activePullRequestReview = computed(() => prReview.value ?? demoPullRequestReview)
+const aiContextReferences = computed(() => {
+  if (lastMatchedReferences.value.length) {
+    return lastMatchedReferences.value
+  }
+
+  if (lastQuestion.value) {
+    return findRelevantReferences(lastQuestion.value, sourceReferences.value)
+  }
+
+  return sourceReferences.value.slice(0, 3)
+})
+const aiConfidence = computed(() => {
+  if (lastQuestion.value) {
+    return lastAiConfidence.value
+  }
+
+  const referenceScore = Math.min(aiContextReferences.value.length * 18, 54)
+  const riskPenalty = Math.min(riskSignals.value.length * 4, 18)
+  const liveBonus = analysis.value ? 18 : 8
+
+  return clampScore(referenceScore + liveBonus + 30 - riskPenalty)
+})
 const isDemoMode = computed(() => String(config.public.demoMode) === 'true')
 const currentSection = computed(() => navItems.find((item) => item.id === activeSection.value) ?? {
   id: 'repository' as const,
@@ -320,6 +372,92 @@ const reportRows = computed(() => [
     updated: activePullRequestReview.value.id
   }
 ])
+const workspaceSetupSteps = computed<WorkspaceSetupStep[]>(() => [
+  {
+    id: 'connect',
+    label: 'Connect repository',
+    detail: analysis.value ? `${repositoryName.value} is indexed with live source metadata.` : 'Paste a GitHub repository URL or keep the demo workspace.',
+    status: analysis.value || repoUrl.value ? 'done' : 'active',
+    action: 'Edit repository'
+  },
+  {
+    id: 'analyze',
+    label: 'Run analysis',
+    detail: analysis.value ? `${sourceReferences.value.length} source references and ${architectureNodes.value.length} nodes are ready.` : 'Build architecture, references, risk signals, and PR context.',
+    status: analysis.value ? 'done' : 'active',
+    action: analysis.value ? 'Re-run analysis' : 'Analyze now'
+  },
+  {
+    id: 'ask',
+    label: 'Ask with sources',
+    detail: lastQuestion.value ? `${aiContextReferences.value.length} files grounded the latest answer.` : 'Ask Gemini or local fallback a repository question with cited files.',
+    status: lastQuestion.value ? 'done' : analysis.value ? 'active' : 'pending',
+    action: 'Open AI workspace'
+  },
+  {
+    id: 'export',
+    label: 'Export report',
+    detail: lastReportExportedAt.value === 'Not exported yet' ? 'Create a Markdown or JSON report for portfolio review.' : `Last exported ${lastReportExportedAt.value}.`,
+    status: lastReportExportedAt.value === 'Not exported yet' ? 'pending' : 'done',
+    action: 'Export package'
+  }
+])
+const reportMarkdown = computed(() => {
+  const repository = analysis.value?.repository
+  const summary = summaryItems.value.map((item) => `- **${item.label}:** ${item.text}`).join('\n')
+  const risks = riskSignals.value.length ? riskSignals.value.map((risk) => `- ${risk}`).join('\n') : '- No blocking risk signals detected.'
+  const sources = sourceReferences.value.slice(0, 10).map((reference) => `- \`${reference.file}\` (${reference.service}): ${reference.description}`).join('\n')
+  const nodes = architectureNodes.value.map((node) => `- ${node.label} (${node.kind}): ${node.detail}`).join('\n')
+  const pr = activePullRequestReview.value
+
+  return `# CodeAtlas Report: ${repositoryName.value}
+
+Generated: ${new Date().toISOString()}
+Mode: ${isDemoMode.value ? 'Demo fallback' : 'Live API'}
+Health: ${repositoryHealthScore.value}/100 (${repositoryHealthLabel.value})
+
+## Repository
+
+- URL: ${repository?.url ?? `https://github.com/${repositoryName.value}`}
+- Language: ${repository?.language ?? 'TypeScript'}
+- Files: ${(repository?.fileCount ?? 1842).toLocaleString('en-US')}
+- Estimated LOC: ${formatLoc(repository?.estimatedLoc ?? 612000)}
+- Stars: ${(repository?.stars ?? 12400).toLocaleString('en-US')}
+
+## AI Summary
+
+${answer.value}
+
+## Summary Items
+
+${summary}
+
+## Architecture Nodes
+
+${nodes}
+
+## Source References
+
+${sources}
+
+## Risk Signals
+
+${risks}
+
+## Pull Request Review
+
+- PR: ${pr.id} ${pr.title}
+- Risk: ${pr.risk}
+- Changed files: ${pr.changedFiles}
+- Summary: ${pr.summary}
+
+## Next Steps
+
+- Ask CodeAtlas about the highest-risk module.
+- Review source references before editing architecture-critical files.
+- Export this report after every major analysis run.
+`
+})
 const integrationRows = computed(() => [
   {
     name: 'GitHub',
@@ -375,7 +513,9 @@ const settingsRows = computed(() => [
   { label: 'Mode', value: isDemoMode.value ? 'Static demo' : 'Live server' },
   { label: 'Repository', value: repositoryName.value },
   { label: 'PR source', value: activePullRequestReview.value.repositoryFullName },
-  { label: 'AI provider', value: isDemoMode.value ? 'Demo fallback' : 'Google Gemini' }
+  { label: 'AI provider', value: isDemoMode.value ? 'Demo fallback' : 'Google Gemini' },
+  { label: 'Saved workspaces', value: savedWorkspaces.value.length.toString() },
+  { label: 'Last export', value: lastReportExportedAt.value }
 ])
 
 const isWorkspaceBusy = computed(() => isAnalyzing.value || isReviewingPr.value || isAsking.value)
@@ -467,11 +607,14 @@ useHead(() => ({
     { property: 'og:title', content: pageTitle.value },
     { property: 'og:description', content: pageDescription.value },
     { property: 'og:url', content: CANONICAL_URL },
-    { property: 'og:image', content: `${CANONICAL_URL}favicon.svg` },
-    { name: 'twitter:card', content: 'summary' },
+    { property: 'og:image', content: `${CANONICAL_URL}og-image.svg` },
+    { property: 'og:image:type', content: 'image/svg+xml' },
+    { property: 'og:image:width', content: '1200' },
+    { property: 'og:image:height', content: '630' },
+    { name: 'twitter:card', content: 'summary_large_image' },
     { name: 'twitter:title', content: pageTitle.value },
     { name: 'twitter:description', content: pageDescription.value },
-    { name: 'twitter:image', content: `${CANONICAL_URL}favicon.svg` }
+    { name: 'twitter:image', content: `${CANONICAL_URL}og-image.svg` }
   ],
   link: [
     { rel: 'canonical', href: CANONICAL_URL },
@@ -537,6 +680,7 @@ const changeSection = (section: NavSection) => {
   const target = navItems.find((item) => item.id === section)
 
   notifyWorkspace('Section switched', target?.label ?? 'Workspace view updated', 'info')
+  persistWorkspaceState()
 }
 
 const handleUtilityAction = (label: string, detail: string) => {
@@ -559,10 +703,17 @@ const startNewAnalysis = async () => {
   activeSection.value = 'repository'
   analysisError.value = ''
   notifyWorkspace('New analysis ready', 'Repository field selected. Paste a GitHub URL and run analysis.', 'info')
+  persistWorkspaceState()
   await focusRepositoryInput()
 }
 
 const selectRecentAnalysis = async (repository: string) => {
+  if (restoreWorkspaceByRepository(repository)) {
+    await focusRepositoryInput()
+
+    return
+  }
+
   repoUrl.value = `github.com/${repository}`
   activeSection.value = 'repository'
   notifyWorkspace('Recent analysis selected', `${repository} is ready to run again.`, 'info')
@@ -601,6 +752,103 @@ const persistRecentAnalyses = () => {
   window.localStorage.setItem(RECENT_ANALYSES_STORAGE_KEY, JSON.stringify(recentAnalyses.value.slice(0, 6)))
 }
 
+const buildWorkspaceSnapshot = (): StoredWorkspace => ({
+  version: 1,
+  repository: repositoryName.value,
+  repoUrl: repoUrl.value,
+  prUrl: prUrl.value,
+  activeSection: activeSection.value,
+  lastAnalyzedAt: lastAnalyzedAt.value,
+  answer: answer.value,
+  lastQuestion: lastQuestion.value,
+  lastAiConfidence: lastAiConfidence.value,
+  lastSavedAt: formatRecentAnalysisTime(new Date()),
+  lastReportExportedAt: lastReportExportedAt.value,
+  analysis: analysis.value,
+  prReview: prReview.value,
+  recentAnalyses: recentAnalyses.value.slice(0, 6),
+  activityLog: activityLog.value.slice(0, 8),
+  settings: { ...workspaceSettings }
+})
+
+const applyWorkspaceSnapshot = (snapshot: StoredWorkspace) => {
+  repoUrl.value = snapshot.repoUrl
+  prUrl.value = snapshot.prUrl
+  activeSection.value = snapshot.activeSection
+  lastAnalyzedAt.value = snapshot.lastAnalyzedAt
+  answer.value = snapshot.answer
+  lastQuestion.value = snapshot.lastQuestion
+  lastAiConfidence.value = snapshot.lastAiConfidence || 82
+  lastWorkspaceSavedAt.value = snapshot.lastSavedAt
+  lastReportExportedAt.value = snapshot.lastReportExportedAt || 'Not exported yet'
+  analysis.value = snapshot.analysis
+  prReview.value = snapshot.prReview
+  recentAnalyses.value = snapshot.recentAnalyses.filter(isRecentAnalysis).slice(0, 6)
+  activityLog.value = snapshot.activityLog.slice(0, 8)
+  Object.assign(workspaceSettings, snapshot.settings)
+  lastMatchedReferences.value = snapshot.lastQuestion ? findRelevantReferences(snapshot.lastQuestion, sourceReferences.value) : []
+}
+
+const persistWorkspaceState = () => {
+  if (!import.meta.client) {
+    return
+  }
+
+  const snapshot = buildWorkspaceSnapshot()
+  const archive = [
+    snapshot,
+    ...savedWorkspaces.value.filter((workspace) => workspace.repository !== snapshot.repository)
+  ].slice(0, 6)
+
+  savedWorkspaces.value = archive
+  lastWorkspaceSavedAt.value = snapshot.lastSavedAt
+  window.localStorage.setItem(WORKSPACE_STORAGE_KEY, JSON.stringify(snapshot))
+  window.localStorage.setItem(WORKSPACE_ARCHIVE_STORAGE_KEY, JSON.stringify(archive))
+}
+
+const loadWorkspaceState = () => {
+  if (!import.meta.client) {
+    return
+  }
+
+  try {
+    const archived = window.localStorage.getItem(WORKSPACE_ARCHIVE_STORAGE_KEY)
+
+    if (archived) {
+      const parsed = JSON.parse(archived) as StoredWorkspace[]
+
+      if (Array.isArray(parsed)) {
+        savedWorkspaces.value = parsed.filter(isStoredWorkspace).slice(0, 6)
+      }
+    }
+
+    const saved = window.localStorage.getItem(WORKSPACE_STORAGE_KEY)
+
+    if (saved) {
+      const parsed = JSON.parse(saved) as StoredWorkspace
+
+      if (isStoredWorkspace(parsed)) {
+        applyWorkspaceSnapshot(parsed)
+      }
+    }
+  } catch {
+    savedWorkspaces.value = []
+  }
+}
+
+const restoreWorkspaceByRepository = (repository: string) => {
+  const snapshot = savedWorkspaces.value.find((workspace) => workspace.repository === repository)
+
+  if (!snapshot) {
+    return false
+  }
+
+  applyWorkspaceSnapshot(snapshot)
+  notifyWorkspace('Workspace restored', `${repository} analysis state was loaded from this browser.`, 'success')
+
+  return true
+}
+
 const recordRecentAnalysis = () => {
   const entry = buildRecentAnalysisEntry()
   recentAnalyses.value = [
@@ -608,6 +856,7 @@ const recordRecentAnalysis = () => {
     ...recentAnalyses.value.filter((analysisItem) => analysisItem.repository !== entry.repository)
   ].slice(0, 6)
   persistRecentAnalyses()
+  persistWorkspaceState()
 }
 
 const buildRecentAnalysisEntry = (): RecentAnalysis => {
@@ -650,6 +899,7 @@ const toggleWorkspaceSetting = (key: WorkspaceSettingKey) => {
     settingsToggles.value.find((setting) => setting.key === key)?.label ?? 'Workspace preference updated',
     'success'
   )
+  persistWorkspaceState()
 }
 
 const openPullRequestReview = (pullRequest: PullRequest) => {
@@ -659,6 +909,124 @@ const openPullRequestReview = (pullRequest: PullRequest) => {
 
   changeSection('pr-review')
   notifyWorkspace('Pull request selected', `${pullRequest.id} is ready for review.`, 'info')
+}
+
+const handleWorkspaceSetupAction = async (id: string) => {
+  if (id === 'connect') {
+    await startNewAnalysis()
+
+    return
+  }
+
+  if (id === 'analyze') {
+    await analyzeRepository()
+
+    return
+  }
+
+  if (id === 'ask') {
+    changeSection('ask')
+
+    if (!question.value.trim()) {
+      question.value = `What should I inspect first in ${repositoryName.value}?`
+    }
+
+    await nextTick()
+    document.getElementById('codeatlas-question')?.focus()
+
+    return
+  }
+
+  if (id === 'export') {
+    exportCurrentReport('markdown')
+  }
+}
+
+const exportCurrentReport = (format: 'markdown' | 'json' = 'markdown') => {
+  if (!import.meta.client) {
+    return
+  }
+
+  const filenameBase = repositoryName.value.replace(/[^\w.-]+/g, '-').toLowerCase()
+  const isJson = format === 'json'
+  const content = isJson
+    ? JSON.stringify(
+        {
+          repository: analysis.value?.repository ?? repositoryStats.value,
+          health: {
+            score: repositoryHealthScore.value,
+            label: repositoryHealthLabel.value,
+            segments: healthSegments.value
+          },
+          architectureNodes: architectureNodes.value,
+          sourceReferences: sourceReferences.value,
+          riskSignals: riskSignals.value,
+          pullRequestReview: activePullRequestReview.value,
+          answer: answer.value,
+          lastQuestion: lastQuestion.value,
+          generatedAt: new Date().toISOString()
+        },
+        null,
+        2
+      )
+    : reportMarkdown.value
+  const blob = new Blob([content], { type: isJson ? 'application/json;charset=utf-8' : 'text/markdown;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+
+  link.href = url
+  link.download = `${filenameBase}-codeatlas-report.${isJson ? 'json' : 'md'}`
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
+  lastReportExportedAt.value = formatRecentAnalysisTime(new Date())
+  notifyWorkspace('Report exported', `${repositoryName.value} ${isJson ? 'JSON' : 'Markdown'} report downloaded.`, 'success')
+  persistWorkspaceState()
+}
+
+const copyCurrentReport = async () => {
+  try {
+    await navigator.clipboard.writeText(reportMarkdown.value)
+    lastReportExportedAt.value = formatRecentAnalysisTime(new Date())
+    notifyWorkspace('Report copied', 'Markdown report is ready in clipboard.', 'success')
+    persistWorkspaceState()
+  } catch {
+    notifyWorkspace('Copy failed', 'Browser clipboard access was not available.', 'warning')
+  }
+}
+
+const clearWorkspace = () => {
+  analysis.value = null
+  prReview.value = null
+  lastQuestion.value = ''
+  lastMatchedReferences.value = []
+  lastAiConfidence.value = 82
+  answer.value =
+    'This repository is a TypeScript-first SaaS monorepo with a Nuxt dashboard, Fastify API boundary, background workers, and shared packages for GitHub, AI prompts, and repository analysis.'
+  lastAnalyzedAt.value = 'Demo data - 1,842 files - 612k LOC'
+  lastReportExportedAt.value = 'Not exported yet'
+  activeSection.value = 'repository'
+  analysisError.value = ''
+  prReviewError.value = ''
+  aiQuestionError.value = ''
+
+  if (import.meta.client) {
+    window.localStorage.removeItem(WORKSPACE_STORAGE_KEY)
+  }
+
+  notifyWorkspace('Workspace cleared', 'Local active analysis was reset. Saved archive remains available.', 'info')
+}
+
+const askAboutArchitectureNode = async (node: { label: string; detail: string }) => {
+  question.value = `Explain ${node.label}: responsibilities, source files, risks, and tests.`
+  lastQuestion.value = question.value
+  lastMatchedReferences.value = findRelevantReferences(`${node.label} ${node.detail}`, sourceReferences.value)
+  lastAiConfidence.value = Math.max(58, Math.min(92, 62 + lastMatchedReferences.value.length * 8 - riskSignals.value.length * 2))
+  changeSection('ask')
+  notifyWorkspace('Node question prepared', `${node.label} is ready in the AI workspace.`, 'info')
+  await nextTick()
+  document.getElementById('codeatlas-question')?.focus()
 }
 
 const withClientTimeout = async <T>(request: (signal: AbortSignal) => Promise<T>) => {
@@ -710,11 +1078,13 @@ const analyzeRepository = async () => {
     lastAnalyzedAt.value = `Completed just now - ${result.repository.fileCount.toLocaleString('en-US')} files - ${formatLoc(result.repository.estimatedLoc)} LOC`
     recordRecentAnalysis()
     notifyWorkspace('Repository analysis complete', `${result.repository.fullName} is ready.`, 'success')
+    persistWorkspaceState()
     succeeded = true
   } catch (error) {
     analysisError.value = getErrorMessage(error)
     lastAnalyzedAt.value = 'Analysis failed'
     notifyWorkspace('Repository analysis failed', analysisError.value, 'danger')
+    persistWorkspaceState()
   } finally {
     isAnalyzing.value = false
     stopAnalysisProgress(succeeded)
@@ -743,9 +1113,11 @@ const reviewPullRequest = async () => {
         )
 
     notifyWorkspace('Pull request review complete', `${prReview.value.repositoryFullName} ${prReview.value.id} is ready.`, 'success')
+    persistWorkspaceState()
   } catch (error) {
     prReviewError.value = getErrorMessage(error)
     notifyWorkspace('Pull request review failed', prReviewError.value, 'danger')
+    persistWorkspaceState()
   } finally {
     isReviewingPr.value = false
   }
@@ -826,11 +1198,15 @@ const askCodeAtlas = async () => {
   const files = matches.map((reference) => reference.file).join(', ')
   const repoName = analysis.value?.repository.fullName ?? 'the demo repository'
   const fallbackAnswer = `For "${normalizedQuestion}", start in ${files}. CodeAtlas selected these files from ${repoName} because their path, service, or description best matched the question.`
+  lastQuestion.value = normalizedQuestion
+  lastMatchedReferences.value = matches
 
   if (isDemoMode.value) {
     answer.value = fallbackAnswer
     aiQuestionError.value = ''
+    lastAiConfidence.value = Math.max(54, Math.min(94, 58 + matches.length * 9 - riskSignals.value.length * 3))
     notifyWorkspace('Local answer ready', 'Demo-mode source references were matched.', 'success')
+    persistWorkspaceState()
 
     return
   }
@@ -854,11 +1230,16 @@ const askCodeAtlas = async () => {
     )
 
     answer.value = result.answer || fallbackAnswer
+    lastMatchedReferences.value = Array.isArray(result.references) && result.references.length ? result.references : matches
+    lastAiConfidence.value = typeof result.confidence === 'number' ? result.confidence : aiConfidence.value
     notifyWorkspace('Gemini answer ready', 'The answer is grounded in current source references.', 'success')
+    persistWorkspaceState()
   } catch (error) {
     aiQuestionError.value = getErrorMessage(error)
     answer.value = fallbackAnswer
+    lastAiConfidence.value = Math.max(54, Math.min(88, 54 + matches.length * 8 - riskSignals.value.length * 3))
     notifyWorkspace('Gemini fallback shown', aiQuestionError.value, 'warning')
+    persistWorkspaceState()
   } finally {
     isAsking.value = false
   }
@@ -946,6 +1327,31 @@ function isRecentAnalysis(value: unknown): value is RecentAnalysis {
   )
 }
 
+function isStoredWorkspace(value: unknown): value is StoredWorkspace {
+  if (typeof value !== 'object' || !value) {
+    return false
+  }
+
+  const item = value as Partial<StoredWorkspace>
+
+  return (
+    item.version === 1 &&
+    typeof item.repository === 'string' &&
+    typeof item.repoUrl === 'string' &&
+    typeof item.prUrl === 'string' &&
+    typeof item.activeSection === 'string' &&
+    typeof item.lastAnalyzedAt === 'string' &&
+    typeof item.answer === 'string' &&
+    typeof item.lastQuestion === 'string' &&
+    (typeof item.lastAiConfidence === 'number' || typeof item.lastAiConfidence === 'undefined') &&
+    typeof item.lastSavedAt === 'string' &&
+    Array.isArray(item.recentAnalyses) &&
+    Array.isArray(item.activityLog) &&
+    typeof item.settings === 'object' &&
+    Boolean(item.settings)
+  )
+}
+
 function isAbortError(error: unknown) {
   if (typeof error !== 'object' || !error) {
     return false
@@ -976,7 +1382,11 @@ function getErrorMessage(error: unknown) {
 }
 
 onMounted(() => {
-  loadRecentAnalyses()
+  loadWorkspaceState()
+
+  if (!recentAnalyses.value.length) {
+    loadRecentAnalyses()
+  }
 })
 
 onBeforeUnmount(() => {
@@ -1031,7 +1441,11 @@ onBeforeUnmount(() => {
           :is-asking="isAsking"
           :is-demo-mode="isDemoMode"
           :repository-name="repositoryName"
+          :saved-workspace-count="savedWorkspaces.length"
+          :source-count="sourceReferences.length"
           @ask="askCodeAtlas"
+          @clear-workspace="clearWorkspace"
+          @export-report="exportCurrentReport('markdown')"
           @focus-command="handleUtilityAction('Command focused', 'Type a question and press Enter to ask CodeAtlas.')"
           @new-analysis="startNewAnalysis"
           @open-section="changeSection"
@@ -1058,6 +1472,13 @@ onBeforeUnmount(() => {
               :analysis-error="analysisError"
               @analyze="analyzeRepository"
               @view-report="changeSection('reports')"
+            />
+
+            <WorkspaceSetupPanel
+              :steps="workspaceSetupSteps"
+              :saved-workspace-count="savedWorkspaces.length"
+              :last-saved-at="lastWorkspaceSavedAt"
+              @action="handleWorkspaceSetupAction"
             />
 
             <section class="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(320px,420px)_minmax(0,1fr)] 2xl:grid-cols-[minmax(320px,420px)_minmax(0,1fr)_minmax(300px,360px)]">
@@ -1096,7 +1517,14 @@ onBeforeUnmount(() => {
 
             <section class="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(340px,520px)]">
               <InsightFeed :insights="insightFeed" @open="changeSection" />
-              <AiSummaryPanel :summary-items="summaryItems" :answer="answer" :references="sourceReferences" />
+              <AiSummaryPanel
+                :summary-items="summaryItems"
+                :answer="answer"
+                :references="sourceReferences"
+                :context-references="aiContextReferences"
+                :confidence="aiConfidence"
+                :question="lastQuestion"
+              />
             </section>
 
             <section class="grid grid-cols-1 gap-4">
@@ -1109,10 +1537,18 @@ onBeforeUnmount(() => {
               :nodes="architectureNodes"
               :references="sourceReferences"
               :risk-signals="riskSignals"
+              @ask-node="askAboutArchitectureNode"
             />
             <section class="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(340px,520px)]">
               <InsightFeed :insights="insightFeed" @open="changeSection" />
-              <AiSummaryPanel :summary-items="summaryItems" :answer="answer" :references="sourceReferences" />
+              <AiSummaryPanel
+                :summary-items="summaryItems"
+                :answer="answer"
+                :references="sourceReferences"
+                :context-references="aiContextReferences"
+                :confidence="aiConfidence"
+                :question="lastQuestion"
+              />
             </section>
             <SourceReferences :references="sourceReferences" />
           </section>
@@ -1148,7 +1584,14 @@ onBeforeUnmount(() => {
               </div>
             </section>
             <section class="flex flex-col gap-4">
-              <AiSummaryPanel :summary-items="summaryItems" :answer="answer" :references="sourceReferences" />
+              <AiSummaryPanel
+                :summary-items="summaryItems"
+                :answer="answer"
+                :references="sourceReferences"
+                :context-references="aiContextReferences"
+                :confidence="aiConfidence"
+                :question="lastQuestion"
+              />
               <SourceReferences :references="sourceReferences" />
             </section>
           </section>
@@ -1259,8 +1702,34 @@ onBeforeUnmount(() => {
 
           <section v-else-if="activeSection === 'reports'" class="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(320px,420px)]">
             <section class="atlas-panel overflow-hidden">
-              <div class="border-b border-atlas-line px-4 py-3">
-                <h3 class="ui-title text-base">Report center</h3>
+              <div class="flex flex-col gap-3 border-b border-atlas-line px-4 py-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <h3 class="ui-title text-base">Report center</h3>
+                  <p class="mt-1 text-xs text-atlas-muted">Export a portfolio-ready package from the current workspace.</p>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    class="ui-button h-9 border-atlas-accent bg-atlas-accent px-3 text-xs text-white shadow-instrument hover:bg-atlas-accentDark"
+                    @click="exportCurrentReport('markdown')"
+                  >
+                    <span class="ui-span">Export Markdown</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="ui-button h-9 border-atlas-border bg-white px-3 text-xs text-atlas-ink hover:border-atlas-accent hover:text-atlas-accent"
+                    @click="exportCurrentReport('json')"
+                  >
+                    <span class="ui-span">Export JSON</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="ui-button h-9 border-atlas-border bg-white px-3 text-xs text-atlas-ink hover:border-atlas-accent hover:text-atlas-accent"
+                    @click="copyCurrentReport"
+                  >
+                    <span class="ui-span">Copy report</span>
+                  </button>
+                </div>
               </div>
               <div class="overflow-x-auto">
                 <table class="w-full min-w-[620px] text-left text-sm">
@@ -1286,9 +1755,19 @@ onBeforeUnmount(() => {
                   </tbody>
                 </table>
               </div>
+              <div class="border-t border-atlas-line bg-atlas-canvas px-4 py-3 text-xs leading-5 text-atlas-muted">
+                Last export: {{ lastReportExportedAt }}. Reports include health score, architecture nodes, source citations, risks, and PR review.
+              </div>
             </section>
 
-            <AiSummaryPanel :summary-items="summaryItems" :answer="answer" :references="sourceReferences" />
+            <AiSummaryPanel
+              :summary-items="summaryItems"
+              :answer="answer"
+              :references="sourceReferences"
+              :context-references="aiContextReferences"
+              :confidence="aiConfidence"
+              :question="lastQuestion"
+            />
           </section>
 
           <section v-else-if="activeSection === 'integrations'" class="grid grid-cols-1 gap-4 xl:grid-cols-2">

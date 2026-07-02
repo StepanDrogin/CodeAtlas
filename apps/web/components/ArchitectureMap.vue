@@ -10,6 +10,10 @@ const props = withDefaults(defineProps<{
   riskSignals: () => []
 })
 
+defineEmits<{
+  'ask-node': [node: ArchitectureNode]
+}>()
+
 const selectedNodeId = ref(props.nodes[0]?.id ?? '')
 
 const nodeTone: Record<ArchitectureNode['kind'], string> = {
@@ -196,6 +200,13 @@ watch(
               <p class="mt-2 text-sm leading-5 text-atlas-muted">
                 Review the ownership files, then ask CodeAtlas to explain coupling and tests for {{ selectedNode.label }}.
               </p>
+              <button
+                type="button"
+                class="ui-button mt-3 h-9 w-full border-atlas-border bg-white px-3 text-atlas-ink hover:border-atlas-accent hover:text-atlas-accent"
+                @click="$emit('ask-node', selectedNode)"
+              >
+                <span class="ui-span">Ask about this node</span>
+              </button>
             </section>
           </div>
         </div>

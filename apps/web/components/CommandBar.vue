@@ -17,6 +17,8 @@ defineProps<{
   activeSectionLabel: string
   isDemoMode: boolean
   repositoryName: string
+  savedWorkspaceCount: number
+  sourceCount: number
 }>()
 
 const emit = defineEmits<{
@@ -24,12 +26,19 @@ const emit = defineEmits<{
   'focus-command': []
   'new-analysis': []
   'open-section': [section: NavSection]
+  'export-report': []
+  'clear-workspace': []
 }>()
 
 const commandInput = ref<HTMLInputElement | null>(null)
 const activePanel = ref<'actions' | 'activity' | 'workspace' | null>(null)
 
 const quickActions: Array<{ label: string; section: NavSection; badge: string }> = [
+  {
+    label: 'Architecture',
+    section: 'architecture',
+    badge: 'Map'
+  },
   {
     label: 'Ask CodeAtlas',
     section: 'ask',
@@ -76,6 +85,16 @@ const openSection = (section: NavSection) => {
 const startNewAnalysis = () => {
   activePanel.value = null
   emit('new-analysis')
+}
+
+const exportReport = () => {
+  activePanel.value = null
+  emit('export-report')
+}
+
+const clearWorkspace = () => {
+  activePanel.value = null
+  emit('clear-workspace')
 }
 
 const handleKeydown = (event: KeyboardEvent) => {
@@ -191,6 +210,17 @@ onBeforeUnmount(() => {
               </span>
               <span class="ui-span rounded border border-atlas-border bg-atlas-canvas px-2 py-0.5 text-xs text-atlas-muted">{{ action.badge }}</span>
             </button>
+            <button
+              type="button"
+              class="ui-button w-full justify-between border-atlas-border bg-white px-3 py-2 text-left text-atlas-ink hover:border-atlas-accent hover:text-atlas-accent"
+              aria-label="Export report"
+              @click="exportReport"
+            >
+              <span class="ui-span min-w-0">
+                <span class="ui-span block text-sm font-semibold">Export report</span>
+              </span>
+              <span class="ui-span rounded border border-atlas-border bg-atlas-canvas px-2 py-0.5 text-xs text-atlas-muted">MD</span>
+            </button>
           </div>
         </section>
       </Transition>
@@ -245,6 +275,14 @@ onBeforeUnmount(() => {
               <span class="ui-span text-sm text-atlas-muted">Mode</span>
               <span class="ui-span rounded bg-atlas-rail px-2 py-1 text-xs font-semibold text-atlas-accent">{{ isDemoMode ? 'Demo' : 'Live API' }}</span>
             </div>
+            <div class="flex items-center justify-between gap-3 px-4 py-3">
+              <span class="ui-span text-sm text-atlas-muted">Sources</span>
+              <span class="ui-span truncate text-sm font-semibold text-atlas-ink">{{ sourceCount }}</span>
+            </div>
+            <div class="flex items-center justify-between gap-3 px-4 py-3">
+              <span class="ui-span text-sm text-atlas-muted">Saved</span>
+              <span class="ui-span truncate text-sm font-semibold text-atlas-ink">{{ savedWorkspaceCount }}</span>
+            </div>
           </div>
           <div class="grid grid-cols-2 gap-2 p-3">
             <button type="button" class="ui-button h-9 border-atlas-border bg-white px-3 text-atlas-ink hover:text-atlas-accent" aria-label="Open workspace settings" @click="openSection('settings')">
@@ -252,6 +290,12 @@ onBeforeUnmount(() => {
             </button>
             <button type="button" class="ui-button h-9 border-atlas-border bg-white px-3 text-atlas-ink hover:text-atlas-accent" aria-label="Open workspace integrations" @click="openSection('integrations')">
               <span class="ui-span">Integrations</span>
+            </button>
+            <button type="button" class="ui-button h-9 border-atlas-border bg-white px-3 text-atlas-ink hover:text-atlas-accent" aria-label="Export current report" @click="exportReport">
+              <span class="ui-span">Export</span>
+            </button>
+            <button type="button" class="ui-button h-9 border-atlas-border bg-white px-3 text-atlas-muted hover:text-atlas-danger" aria-label="Clear local workspace" @click="clearWorkspace">
+              <span class="ui-span">Clear</span>
             </button>
           </div>
         </section>
