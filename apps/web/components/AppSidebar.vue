@@ -29,10 +29,14 @@ defineEmits<{
         v-for="item in navItems"
         :key="item.id"
         type="button"
-        class="ui-button h-10 shrink-0 justify-start px-3 text-atlas-muted hover:bg-atlas-rail hover:text-atlas-accent lg:w-full"
+        class="ui-button relative h-10 shrink-0 justify-start px-3 text-atlas-muted hover:bg-atlas-rail hover:text-atlas-accent lg:w-full"
         :class="item.id === activeSection ? 'bg-atlas-rail text-atlas-accent shadow-insetLine' : ''"
         @click="$emit('change-section', item.id)"
       >
+        <span
+          class="ui-span absolute left-0 h-5 w-1 rounded-r-full bg-atlas-accent transition"
+          :class="item.id === activeSection ? 'opacity-100' : 'opacity-0'"
+        ></span>
         <span class="ui-span grid h-5 w-5 place-items-center text-current">
           <AppIcon :name="item.icon" class="h-4 w-4" />
         </span>

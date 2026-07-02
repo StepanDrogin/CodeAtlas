@@ -16,6 +16,8 @@ interface GeminiTextOptions {
   temperature?: number
 }
 
+const GEMINI_REQUEST_TIMEOUT_MS = 20000
+
 export function isGeminiConfigured() {
   return Boolean(readGeminiApiKey())
 }
@@ -28,21 +30,39 @@ export async function generateGeminiText(input: string, options: GeminiTextOptio
   }
 
   const model = readGeminiModel()
-  const response = await fetch('https://generativelanguage.googleapis.com/v1beta/interactions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-goog-api-key': apiKey
-    },
-    body: JSON.stringify({
-      model,
-      input,
-      generation_config: {
-        thinking_level: 'low',
-        temperature: options.temperature ?? 0.2
-      }
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), GEMINI_REQUEST_TIMEOUT_MS)
+  let response: Response
+
+  try {
+    response = await fetch('https://generativelanguage.googleapis.com/v1beta/interactions', {
+      method: 'POST',
+      signal: controller.signal,
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': apiKey
+      },
+      body: JSON.stringify({
+        model,
+        input,
+        generation_config: {
+          thinking_level: 'low',
+          temperature: options.temperature ?? 0.2
+        }
+      })
     })
-  })
+  } catch (error) {
+    if (isAbortError(error)) {
+      throw createError({
+        statusCode: 504,
+        statusMessage: 'Gemini API request timed out.'
+      })
+    }
+
+    throw error
+  } finally {
+    clearTimeout(timeoutId)
+  }
 
   if (!response.ok) {
     const details = await response.text().catch(() => '')
@@ -57,6 +77,18 @@ export async function generateGeminiText(input: string, options: GeminiTextOptio
   const text = extractInteractionText(data)
 
   return text || null
+}
+
+function isAbortError(error: unknown) {
+  if (typeof error !== 'object' || !error) {
+    return false
+  }
+
+  const namedError = error as { name?: unknown; message?: unknown }
+  const name = typeof namedError.name === 'string' ? namedError.name : ''
+  const message = typeof namedError.message === 'string' ? namedError.message : ''
+
+  return name === 'AbortError' || message.toLowerCase().includes('abort')
 }
 
 function extractInteractionText(data: GeminiInteractionResponse) {

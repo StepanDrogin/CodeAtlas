@@ -11,6 +11,7 @@
 html {
   min-width: 320px;
   background: #f7f9fb;
+  scroll-behavior: smooth;
 }
 
 body {
@@ -19,6 +20,10 @@ body {
   background: #f7f9fb;
   color: #121826;
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  background-image:
+    linear-gradient(135deg, rgba(238, 247, 245, 0.72), rgba(255, 255, 255, 0) 38%),
+    radial-gradient(circle at 1px 1px, rgba(0, 122, 104, 0.08) 1px, transparent 0);
+  background-size: auto, 22px 22px;
 }
 
 button,
@@ -38,18 +43,66 @@ textarea {
   }
 
   .ui-button {
-    @apply inline-flex items-center justify-center gap-2 rounded-atlas border border-transparent text-sm font-medium tracking-normal transition duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-atlas-accent/30 disabled:cursor-not-allowed disabled:opacity-60;
+    @apply inline-flex items-center justify-center gap-2 rounded-atlas border border-transparent text-sm font-medium tracking-normal transition duration-150 ease-out hover:-translate-y-0.5 hover:shadow-sm active:translate-y-0 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-atlas-accent/30 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:hover:shadow-none disabled:active:scale-100;
   }
 
   .atlas-panel {
-    @apply rounded-atlas border border-atlas-border bg-atlas-surface shadow-atlas;
+    @apply rounded-atlas border border-atlas-border bg-atlas-surface shadow-atlas transition duration-200 ease-out;
   }
 
   .atlas-control {
-    @apply h-10 rounded-atlas border border-atlas-border bg-atlas-surface px-3 text-sm text-atlas-ink outline-none transition focus:border-atlas-accent focus:ring-2 focus:ring-atlas-accent/20;
+    @apply h-10 rounded-atlas border border-atlas-border bg-atlas-surface px-3 text-sm text-atlas-ink outline-none transition duration-150 ease-out focus:border-atlas-accent focus:ring-2 focus:ring-atlas-accent/20;
   }
 
   .atlas-muted-label {
     @apply text-xs font-medium uppercase tracking-normal text-atlas-muted;
+  }
+}
+
+@keyframes atlas-progress {
+  0% {
+    transform: translateX(-110%);
+  }
+
+  50% {
+    transform: translateX(125%);
+  }
+
+  100% {
+    transform: translateX(320%);
+  }
+}
+
+.animate-atlas-progress {
+  animation: atlas-progress 1.1s ease-in-out infinite;
+}
+
+.atlas-section-enter-active,
+.atlas-section-leave-active,
+.atlas-toast-enter-active,
+.atlas-toast-leave-active {
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.atlas-section-enter-from,
+.atlas-section-leave-to {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+.atlas-toast-enter-from,
+.atlas-toast-leave-to {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
   }
 }

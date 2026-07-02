@@ -15,6 +15,15 @@ interface AiQuestionResponse {
   answer: string
 }
 
+interface WorkspaceActivity {
+  label: string
+  detail: string
+  tone: 'info' | 'success' | 'warning' | 'danger'
+}
+
+const CLIENT_REQUEST_TIMEOUT_MS = 25000
+const CANONICAL_URL = 'https://code-atlas-web-kappa.vercel.app/'
+
 const config = useRuntimeConfig()
 const activeSection = ref<NavSection>('repository')
 const repoUrl = ref('github.com/nuxt/nuxt')
@@ -22,11 +31,15 @@ const prUrl = ref('github.com/nuxt/nuxt/pull/32537')
 const question = ref('')
 const isAnalyzing = ref(false)
 const isReviewingPr = ref(false)
+const isAsking = ref(false)
 const analysisError = ref('')
 const prReviewError = ref('')
+const aiQuestionError = ref('')
 const lastAnalyzedAt = ref('Demo data - 1,842 files - 612k LOC')
 const analysis = ref<RepositoryAnalysis | null>(null)
 const prReview = ref<PullRequestReview | null>(null)
+const recentAction = ref<WorkspaceActivity | null>(null)
+const recentActionTimeout = ref<ReturnType<typeof setTimeout> | null>(null)
 const answer = ref(
   'This repository is a TypeScript-first SaaS monorepo with a Nuxt dashboard, Fastify API boundary, background workers, and shared packages for GitHub, AI prompts, and repository analysis.'
 )
@@ -133,9 +146,9 @@ const integrationRows = computed(() => [
     detail: 'Repository summaries, Q&A, and PR review fallback'
   },
   {
-    name: 'GitHub Pages',
-    status: 'Static build',
-    detail: 'Public portfolio deployment with demo-safe data'
+    name: 'Vercel',
+    status: 'Production',
+    detail: 'Server-capable portfolio deployment with live API routes'
   },
   {
     name: 'Local API',
@@ -179,8 +192,168 @@ const settingsRows = computed(() => [
   { label: 'AI provider', value: isDemoMode.value ? 'Demo fallback' : 'Google Gemini' }
 ])
 
+const isWorkspaceBusy = computed(() => isAnalyzing.value || isReviewingPr.value || isAsking.value)
+const workspaceActivity = computed<WorkspaceActivity>(() => {
+  if (isAnalyzing.value) {
+    return {
+      label: 'Analyzing repository',
+      detail: 'Indexing files, architecture, risks, and pull requests.',
+      tone: 'warning'
+    }
+  }
+
+  if (isReviewingPr.value) {
+    return {
+      label: 'Reviewing pull request',
+      detail: 'Collecting changed files and review signals.',
+      tone: 'warning'
+    }
+  }
+
+  if (isAsking.value) {
+    return {
+      label: 'Asking Gemini',
+      detail: 'Preparing an answer from current source references.',
+      tone: 'info'
+    }
+  }
+
+  return recentAction.value ?? {
+    label: 'Workspace ready',
+    detail: 'Controls are available.',
+    tone: 'success'
+  }
+})
+const activityToneClass = computed(() => {
+  const tone = workspaceActivity.value.tone
+
+  if (tone === 'danger') {
+    return 'bg-red-50 text-atlas-danger ring-red-100'
+  }
+
+  if (tone === 'warning') {
+    return 'bg-amber-50 text-amber-700 ring-amber-100'
+  }
+
+  if (tone === 'info') {
+    return 'bg-blue-50 text-atlas-info ring-blue-100'
+  }
+
+  return 'bg-emerald-50 text-atlas-success ring-emerald-100'
+})
+const pageTitle = computed(() => {
+  if (activeSection.value === 'repository') {
+    return `CodeAtlas - AI repository intelligence for ${repositoryName.value}`
+  }
+
+  return `CodeAtlas ${currentSection.value.label} - ${repositoryName.value}`
+})
+const pageDescription = computed(() => {
+  const sectionDescription: Record<NavSection, string> = {
+    repository: 'Analyze GitHub repositories, source references, architecture, risks, and pull requests in a focused AI workspace.',
+    architecture: 'Map repository layers, service boundaries, workers, data flows, and source references with CodeAtlas.',
+    ask: 'Ask Gemini-backed CodeAtlas questions about the current repository and get answers grounded in source references.',
+    'pr-review': 'Review pull requests with changed-file context, risk signals, missing tests, and suggested reviewer comments.',
+    observability: 'Track repository analysis metrics, latency, requests, error rate, token use, and operational health.',
+    bookmarks: 'Save important source references and pull request watchlist items for follow-up repository work.',
+    reports: 'Generate architecture briefs, risk registers, and pull request review packs from repository analysis.',
+    integrations: 'Connect CodeAtlas with GitHub, Gemini, local APIs, and deployment workflows.',
+    settings: 'Configure CodeAtlas workspace behavior, risk signals, AI mode, and repository context.'
+  }
+
+  return sectionDescription[activeSection.value]
+})
+
+useHead(() => ({
+  htmlAttrs: {
+    lang: 'en'
+  },
+  title: pageTitle.value,
+  meta: [
+    { name: 'description', content: pageDescription.value },
+    { name: 'application-name', content: 'CodeAtlas' },
+    { name: 'author', content: 'Stepan Drogin' },
+    { name: 'robots', content: 'index, follow, max-image-preview:large' },
+    { name: 'theme-color', content: '#007a68' },
+    { name: 'color-scheme', content: 'light' },
+    { property: 'og:type', content: 'website' },
+    { property: 'og:site_name', content: 'CodeAtlas' },
+    { property: 'og:title', content: pageTitle.value },
+    { property: 'og:description', content: pageDescription.value },
+    { property: 'og:url', content: CANONICAL_URL },
+    { property: 'og:image', content: `${CANONICAL_URL}favicon.svg` },
+    { name: 'twitter:card', content: 'summary' },
+    { name: 'twitter:title', content: pageTitle.value },
+    { name: 'twitter:description', content: pageDescription.value },
+    { name: 'twitter:image', content: `${CANONICAL_URL}favicon.svg` }
+  ],
+  link: [
+    { rel: 'canonical', href: CANONICAL_URL },
+    { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' },
+    { rel: 'apple-touch-icon', href: '/apple-touch-icon.svg' },
+    { rel: 'manifest', href: '/site.webmanifest' }
+  ],
+  script: [
+    {
+      type: 'application/ld+json',
+      innerHTML: JSON.stringify({
+        '@context': 'https://schema.org',
+        '@type': 'SoftwareApplication',
+        name: 'CodeAtlas',
+        applicationCategory: 'DeveloperApplication',
+        operatingSystem: 'Web',
+        url: CANONICAL_URL,
+        description: pageDescription.value,
+        offers: {
+          '@type': 'Offer',
+          price: '0',
+          priceCurrency: 'USD'
+        },
+        creator: {
+          '@type': 'Person',
+          name: 'Stepan Drogin'
+        }
+      })
+    }
+  ]
+}))
+
+watchEffect(() => {
+  if (import.meta.client) {
+    document.title = pageTitle.value
+  }
+})
+
+const notifyWorkspace = (label: string, detail: string, tone: WorkspaceActivity['tone'] = 'info') => {
+  recentAction.value = { label, detail, tone }
+
+  if (recentActionTimeout.value) {
+    clearTimeout(recentActionTimeout.value)
+  }
+
+  recentActionTimeout.value = setTimeout(() => {
+    recentAction.value = null
+  }, 2600)
+}
+
+const changeSection = (section: NavSection) => {
+  activeSection.value = section
+  const target = navItems.find((item) => item.id === section)
+
+  notifyWorkspace('Section switched', target?.label ?? 'Workspace view updated', 'info')
+}
+
+const handleUtilityAction = (label: string, detail: string) => {
+  notifyWorkspace(label, detail, 'info')
+}
+
 const toggleWorkspaceSetting = (key: WorkspaceSettingKey) => {
   workspaceSettings[key] = !workspaceSettings[key]
+  notifyWorkspace(
+    workspaceSettings[key] ? 'Setting enabled' : 'Setting disabled',
+    settingsToggles.value.find((setting) => setting.key === key)?.label ?? 'Workspace preference updated',
+    'success'
+  )
 }
 
 const openPullRequestReview = (pullRequest: PullRequest) => {
@@ -188,7 +361,25 @@ const openPullRequestReview = (pullRequest: PullRequest) => {
     prUrl.value = pullRequest.url
   }
 
-  activeSection.value = 'pr-review'
+  changeSection('pr-review')
+  notifyWorkspace('Pull request selected', `${pullRequest.id} is ready for review.`, 'info')
+}
+
+const withClientTimeout = async <T>(request: (signal: AbortSignal) => Promise<T>) => {
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), CLIENT_REQUEST_TIMEOUT_MS)
+
+  try {
+    return await request(controller.signal)
+  } catch (error) {
+    if (isAbortError(error)) {
+      throw new Error('Request timed out. Try again in a moment.')
+    }
+
+    throw error
+  } finally {
+    clearTimeout(timeoutId)
+  }
 }
 
 const analyzeRepository = async () => {
@@ -203,12 +394,15 @@ const analyzeRepository = async () => {
   try {
     const result = isDemoMode.value
       ? buildDemoRepositoryAnalysis(repoUrl.value)
-      : await $fetch<RepositoryAnalysis>('/api/repositories/analyze', {
-          method: 'POST',
-          body: {
-            repository: repoUrl.value
-          }
-        })
+      : await withClientTimeout((signal) =>
+          $fetch<RepositoryAnalysis>('/api/repositories/analyze', {
+            method: 'POST',
+            signal,
+            body: {
+              repository: repoUrl.value
+            }
+          })
+        )
 
     analysis.value = result
     repoUrl.value = `github.com/${result.repository.fullName}`
@@ -216,9 +410,11 @@ const analyzeRepository = async () => {
     prReview.value = null
     answer.value = result.answer
     lastAnalyzedAt.value = `Completed just now - ${result.repository.fileCount.toLocaleString('en-US')} files - ${formatLoc(result.repository.estimatedLoc)} LOC`
+    notifyWorkspace('Repository analysis complete', `${result.repository.fullName} is ready.`, 'success')
   } catch (error) {
     analysisError.value = getErrorMessage(error)
     lastAnalyzedAt.value = 'Analysis failed'
+    notifyWorkspace('Repository analysis failed', analysisError.value, 'danger')
   } finally {
     isAnalyzing.value = false
   }
@@ -235,14 +431,20 @@ const reviewPullRequest = async () => {
   try {
     prReview.value = isDemoMode.value
       ? buildDemoPullRequestReview(prUrl.value)
-      : await $fetch<PullRequestReview>('/api/pull-requests/review', {
-          method: 'POST',
-          body: {
-            pullRequest: prUrl.value
-          }
-        })
+      : await withClientTimeout((signal) =>
+          $fetch<PullRequestReview>('/api/pull-requests/review', {
+            method: 'POST',
+            signal,
+            body: {
+              pullRequest: prUrl.value
+            }
+          })
+        )
+
+    notifyWorkspace('Pull request review complete', `${prReview.value.repositoryFullName} ${prReview.value.id} is ready.`, 'success')
   } catch (error) {
     prReviewError.value = getErrorMessage(error)
+    notifyWorkspace('Pull request review failed', prReviewError.value, 'danger')
   } finally {
     isReviewingPr.value = false
   }
@@ -271,7 +473,7 @@ const buildDemoRepositoryAnalysis = (repository: string): RepositoryAnalysis => 
     riskSignals: demoRiskSignals,
     technologies: ['TypeScript', 'Nuxt', 'Vue', 'Node.js'],
     answer:
-      'CodeAtlas is running in static demo mode for GitHub Pages. Deploy to a server-capable host to enable live GitHub API analysis and future LLM calls.',
+      'CodeAtlas is running in static demo mode. Deploy to a server-capable host such as Vercel to enable live GitHub API analysis and LLM calls.',
     analyzedAt: new Date().toISOString()
   }
 }
@@ -288,7 +490,7 @@ const buildDemoPullRequestReview = (pullRequest: string): PullRequestReview => {
   }
 }
 
-const normalizeRepositoryFullName = (value: string) => {
+function normalizeRepositoryFullName(value: string) {
   const cleaned = value.trim().replace(/^https?:\/\//, '').replace(/^github\.com\//, '').replace(/\/$/, '')
   const [owner, repo] = cleaned.split('/')
 
@@ -299,7 +501,7 @@ const normalizeRepositoryFullName = (value: string) => {
   return `${owner}/${repo}`
 }
 
-const parsePullRequestUrl = (value: string) => {
+function parsePullRequestUrl(value: string) {
   const match = value.trim().match(/(?:github\.com\/)?([^/\s]+)\/([^/\s]+)\/pull\/(\d+)/)
 
   if (!match) {
@@ -315,7 +517,7 @@ const parsePullRequestUrl = (value: string) => {
 const askCodeAtlas = async () => {
   const normalizedQuestion = question.value.trim()
 
-  if (!normalizedQuestion) {
+  if (!normalizedQuestion || isAsking.value) {
     return
   }
 
@@ -326,30 +528,42 @@ const askCodeAtlas = async () => {
 
   if (isDemoMode.value) {
     answer.value = fallbackAnswer
+    aiQuestionError.value = ''
+    notifyWorkspace('Local answer ready', 'Demo-mode source references were matched.', 'success')
 
     return
   }
 
+  isAsking.value = true
+  aiQuestionError.value = ''
   answer.value = 'Asking Gemini with the current CodeAtlas source references...'
 
   try {
-    const result = await $fetch<AiQuestionResponse>('/api/ai/question', {
-      method: 'POST',
-      body: {
-        question: normalizedQuestion,
-        repositoryFullName: repoName,
-        references: sourceReferences.value,
-        risks: riskSignals.value
-      }
-    })
+    const result = await withClientTimeout((signal) =>
+      $fetch<AiQuestionResponse>('/api/ai/question', {
+        method: 'POST',
+        signal,
+        body: {
+          question: normalizedQuestion,
+          repositoryFullName: repoName,
+          references: sourceReferences.value,
+          risks: riskSignals.value
+        }
+      })
+    )
 
     answer.value = result.answer || fallbackAnswer
-  } catch {
+    notifyWorkspace('Gemini answer ready', 'The answer is grounded in current source references.', 'success')
+  } catch (error) {
+    aiQuestionError.value = getErrorMessage(error)
     answer.value = fallbackAnswer
+    notifyWorkspace('Gemini fallback shown', aiQuestionError.value, 'warning')
+  } finally {
+    isAsking.value = false
   }
 }
 
-const findRelevantReferences = (query: string, references: SourceReference[]) => {
+function findRelevantReferences(query: string, references: SourceReference[]) {
   const tokens = query
     .toLowerCase()
     .split(/\W+/)
@@ -369,7 +583,7 @@ const findRelevantReferences = (query: string, references: SourceReference[]) =>
   return matched.length ? matched : references.slice(0, 3)
 }
 
-const formatLoc = (loc: number) => {
+function formatLoc(loc: number) {
   if (loc >= 1_000_000) {
     return `${(loc / 1_000_000).toFixed(1)}M`
   }
@@ -381,7 +595,20 @@ const formatLoc = (loc: number) => {
   return loc.toString()
 }
 
-const getErrorMessage = (error: unknown) => {
+function isAbortError(error: unknown) {
+  if (typeof error !== 'object' || !error) {
+    return false
+  }
+
+  const namedError = error as { name?: unknown; message?: unknown; statusMessage?: unknown }
+  const name = typeof namedError.name === 'string' ? namedError.name : ''
+  const message = typeof namedError.message === 'string' ? namedError.message : ''
+  const statusMessage = typeof namedError.statusMessage === 'string' ? namedError.statusMessage : ''
+
+  return name === 'AbortError' || message.toLowerCase().includes('abort') || statusMessage.toLowerCase().includes('abort')
+}
+
+function getErrorMessage(error: unknown) {
   if (typeof error === 'object' && error && 'statusMessage' in error) {
     const message = (error as { statusMessage?: string }).statusMessage
 
@@ -396,19 +623,58 @@ const getErrorMessage = (error: unknown) => {
 
   return 'Unable to analyze this repository.'
 }
+
+onBeforeUnmount(() => {
+  if (recentActionTimeout.value) {
+    clearTimeout(recentActionTimeout.value)
+  }
+})
 </script>
 
 <template>
-  <div class="min-h-screen bg-atlas-canvas text-atlas-ink">
+  <div
+    class="min-h-screen overflow-x-hidden bg-atlas-canvas text-atlas-ink"
+    :aria-busy="isWorkspaceBusy"
+  >
+    <div v-if="isWorkspaceBusy" class="fixed inset-x-0 top-0 z-50 h-1 bg-atlas-accent/10" role="status" aria-live="polite">
+      <span class="ui-span block h-full w-1/3 animate-atlas-progress rounded-r-full bg-atlas-accent"></span>
+    </div>
+
+    <Transition name="atlas-toast">
+      <div
+        v-if="isWorkspaceBusy || recentAction"
+        class="fixed bottom-4 left-4 right-4 z-40 flex items-start gap-3 rounded-atlas bg-white/95 p-3 shadow-atlas ring-1 backdrop-blur md:left-auto md:w-[360px]"
+        :class="activityToneClass"
+        role="status"
+        aria-live="polite"
+      >
+        <span
+          class="ui-span mt-1 h-2.5 w-2.5 shrink-0 rounded-full"
+          :class="isWorkspaceBusy ? 'animate-pulse bg-current' : 'bg-current'"
+        ></span>
+        <span class="ui-span min-w-0">
+          <span class="ui-span block text-sm font-semibold">{{ workspaceActivity.label }}</span>
+          <span class="ui-span mt-0.5 block text-xs leading-5 opacity-80">{{ workspaceActivity.detail }}</span>
+        </span>
+      </div>
+    </Transition>
+
     <div class="flex min-h-screen flex-col lg:flex-row">
       <AppSidebar
         :active-section="activeSection"
         :nav-items="navItems"
-        @change-section="activeSection = $event"
+        @change-section="changeSection"
       />
 
       <div class="min-w-0 flex-1">
-        <CommandBar v-model:question="question" @ask="askCodeAtlas" />
+        <CommandBar
+          v-model:question="question"
+          :is-asking="isAsking"
+          @ask="askCodeAtlas"
+          @new-analysis="changeSection('repository')"
+          @show-shortcuts="handleUtilityAction('Shortcut hint', 'Use the command input to ask CodeAtlas from any section.')"
+          @show-notifications="handleUtilityAction('No new notifications', 'The workspace is clear right now.')"
+        />
 
         <main class="mx-auto flex max-w-[1540px] flex-col gap-4 px-4 py-5 md:px-6">
           <section class="flex flex-col gap-3 border-b border-atlas-line pb-4 md:flex-row md:items-end md:justify-between">
@@ -421,6 +687,7 @@ const getErrorMessage = (error: unknown) => {
             </span>
           </section>
 
+          <Transition name="atlas-section" mode="out-in">
           <section v-if="activeSection === 'repository'" class="flex flex-col gap-4">
             <RepoAnalyzer
               v-model:repo-url="repoUrl"
@@ -428,7 +695,7 @@ const getErrorMessage = (error: unknown) => {
               :last-analyzed-at="lastAnalyzedAt"
               :analysis-error="analysisError"
               @analyze="analyzeRepository"
-              @view-report="activeSection = 'reports'"
+              @view-report="changeSection('reports')"
             />
 
             <section class="atlas-panel overflow-hidden">
@@ -464,7 +731,7 @@ const getErrorMessage = (error: unknown) => {
               <div class="border-b border-atlas-line px-4 py-3">
                 <h3 class="ui-title text-base">Question workspace</h3>
               </div>
-              <form class="flex flex-col gap-3 px-4 py-4 md:flex-row" @submit.prevent="askCodeAtlas">
+              <form class="flex flex-col gap-3 px-4 py-4 md:flex-row" :aria-busy="isAsking" @submit.prevent="askCodeAtlas">
                 <label class="sr-only" for="codeatlas-question">Ask CodeAtlas</label>
                 <input
                   id="codeatlas-question"
@@ -473,10 +740,18 @@ const getErrorMessage = (error: unknown) => {
                   type="search"
                   placeholder="Where is billing handled?"
                 >
-                <button type="submit" class="ui-button h-10 bg-atlas-ink px-4 text-white hover:bg-atlas-accent">
-                  <span class="ui-span">Ask Gemini</span>
+                <button
+                  type="submit"
+                  class="ui-button h-10 bg-atlas-ink px-4 text-white hover:bg-atlas-accent"
+                  :disabled="isAsking"
+                >
+                  <span v-if="isAsking" class="ui-span h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white"></span>
+                  <span class="ui-span">{{ isAsking ? 'Asking...' : 'Ask Gemini' }}</span>
                 </button>
               </form>
+              <div v-if="aiQuestionError" class="mx-4 mb-4 rounded-atlas border border-amber-100 bg-amber-50 px-3 py-2 text-sm leading-5 text-amber-800">
+                Gemini did not answer in time, so CodeAtlas showed the local source-reference fallback. {{ aiQuestionError }}
+              </div>
               <div class="border-t border-atlas-line px-4 py-4">
                 <p class="text-sm leading-6 text-atlas-ink">{{ answer }}</p>
               </div>
@@ -674,6 +949,7 @@ const getErrorMessage = (error: unknown) => {
               </div>
             </section>
           </section>
+          </Transition>
         </main>
       </div>
     </div>

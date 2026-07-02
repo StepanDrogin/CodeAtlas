@@ -37,19 +37,22 @@ defineEmits<{
           type="submit"
           class="ui-button h-12 w-full bg-atlas-accent px-5 text-white shadow-atlas hover:bg-atlas-accentDark sm:w-auto sm:min-w-[180px]"
           :disabled="isAnalyzing"
+          :aria-busy="isAnalyzing"
         >
+          <span v-if="isAnalyzing" class="ui-span h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white"></span>
           <span class="ui-span">{{ isAnalyzing ? 'Analyzing...' : 'Analyze repository' }}</span>
         </button>
       </form>
     </div>
 
-    <div class="atlas-panel flex items-center justify-between px-5 py-4">
+    <div class="atlas-panel flex items-center justify-between px-5 py-4" :aria-busy="isAnalyzing">
       <div class="flex items-center gap-3">
         <span
-          class="ui-span grid h-9 w-9 place-items-center rounded-full text-white"
+          class="ui-span grid h-9 w-9 place-items-center rounded-full text-white transition"
           :class="analysisError ? 'bg-atlas-danger' : isAnalyzing ? 'bg-atlas-warning' : 'bg-atlas-success'"
         >
-          {{ analysisError ? '!' : isAnalyzing ? '...' : 'OK' }}
+          <span v-if="isAnalyzing" class="ui-span h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white"></span>
+          <span v-else class="ui-span">{{ analysisError ? '!' : 'OK' }}</span>
         </span>
         <div>
           <p class="text-sm font-semibold text-atlas-ink">{{ analysisError ? 'Analysis failed' : isAnalyzing ? 'Analysis running' : 'Analysis complete' }}</p>

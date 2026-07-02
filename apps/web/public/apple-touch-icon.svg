@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180" role="img" aria-label="CodeAtlas">
+  <rect width="180" height="180" rx="40" fill="#f7f9fb"/>
+  <rect x="18" y="18" width="144" height="144" rx="32" fill="#007a68"/>
+  <path d="M49 66 90 43l41 23-41 23-41-23Z" fill="#ffffff"/>
+  <path d="m49 94 41 23 41-23" fill="none" stroke="#c9fbef" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="m49 120 41 23 41-23" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="90" cy="89" r="10" fill="#12b76a"/>
+</svg>

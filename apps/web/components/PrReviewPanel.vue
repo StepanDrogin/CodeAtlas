@@ -52,7 +52,7 @@ const selectPullRequest = (pullRequest: PullRequest) => {
     </div>
 
     <div v-if="activeTab === 'prs'" class="p-4">
-      <form class="mb-4 flex flex-col gap-2 lg:flex-row" @submit.prevent="$emit('review')">
+      <form class="mb-4 flex flex-col gap-2 lg:flex-row" :aria-busy="isReviewing" @submit.prevent="$emit('review')">
         <label class="sr-only" for="pr-url">GitHub pull request URL</label>
         <input
           id="pr-url"
@@ -67,7 +67,9 @@ const selectPullRequest = (pullRequest: PullRequest) => {
           type="submit"
           class="ui-button h-10 bg-atlas-ink px-4 text-white hover:bg-atlas-accent"
           :disabled="isReviewing"
+          :aria-busy="isReviewing"
         >
+          <span v-if="isReviewing" class="ui-span h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white"></span>
           <span class="ui-span">{{ isReviewing ? 'Reviewing...' : 'Review PR' }}</span>
         </button>
       </form>
