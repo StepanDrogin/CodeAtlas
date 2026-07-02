@@ -33,9 +33,9 @@ export default <Partial<Config>>{
         atlas: '8px'
       },
       boxShadow: {
-        atlas: '0 18px 45px rgb(var(--atlas-shadow) / 0.16)',
+        atlas: '0 16px 36px rgb(var(--atlas-shadow) / 0.13)',
         insetLine: 'inset 0 0 0 1px rgb(var(--atlas-border) / 0.86)',
-        instrument: '0 24px 60px rgb(var(--atlas-accent) / 0.20)'
+        instrument: '0 12px 26px rgb(var(--atlas-shadow) / 0.12)'
       },
       fontFamily: {
         sans: [
