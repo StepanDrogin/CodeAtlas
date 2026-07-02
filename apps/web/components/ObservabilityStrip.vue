@@ -7,6 +7,10 @@ defineProps<{
 
 const range = ref('7D')
 
+const showAllMetrics = () => {
+  range.value = '30D'
+}
+
 const sparklinePath = (points: number[]) => {
   const max = Math.max(...points)
   const min = Math.min(...points)
@@ -37,7 +41,7 @@ const sparklinePath = (points: number[]) => {
           <option>30D</option>
         </select>
       </div>
-      <button type="button" class="ui-button h-8 text-atlas-accent hover:text-atlas-accentDark">
+      <button type="button" class="ui-button h-8 text-atlas-accent hover:text-atlas-accentDark" @click="showAllMetrics">
         <span class="ui-span">View all metrics</span>
         <span class="ui-span">&gt;</span>
       </button>

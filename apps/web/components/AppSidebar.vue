@@ -24,7 +24,7 @@ defineEmits<{
       <h1 class="ui-title text-xl">CodeAtlas</h1>
     </div>
 
-    <nav class="flex gap-1 overflow-x-auto pb-1 lg:flex-1 lg:flex-col lg:overflow-visible lg:pb-0">
+    <nav class="atlas-scrollbar-none flex gap-1 overflow-x-auto pb-1 lg:flex-1 lg:flex-col lg:overflow-visible lg:pb-0">
       <button
         v-for="item in navItems"
         :key="item.id"

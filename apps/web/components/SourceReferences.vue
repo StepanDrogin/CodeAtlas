@@ -24,6 +24,11 @@ const filteredReferences = computed(() => {
     return matchesType && matchesQuery
   })
 })
+
+const showAllFiles = () => {
+  activeType.value = 'All'
+  search.value = ''
+}
 </script>
 
 <template>
@@ -79,7 +84,7 @@ const filteredReferences = computed(() => {
 
     <div class="flex items-center justify-between border-t border-atlas-line px-4 py-3">
       <span class="ui-span text-sm text-atlas-muted">Showing {{ filteredReferences.length }} of {{ references.length }} indexed references</span>
-      <button type="button" class="ui-button h-8 text-atlas-accent hover:text-atlas-accentDark">
+      <button type="button" class="ui-button h-8 text-atlas-accent hover:text-atlas-accentDark" @click="showAllFiles">
         <span class="ui-span">View all files</span>
         <span class="ui-span">&gt;</span>
       </button>

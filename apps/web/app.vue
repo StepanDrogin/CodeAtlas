@@ -9,7 +9,17 @@ import {
   sourceReferences as demoSourceReferences,
   summaryItems as demoSummaryItems
 } from '~/data/demo'
-import type { NavSection, PullRequest, PullRequestReview, RepositoryAnalysis, SourceReference } from '~/types/codeatlas'
+import type {
+  AnalysisStep,
+  HealthSegment,
+  InsightItem,
+  NavSection,
+  PullRequest,
+  PullRequestReview,
+  RecentAnalysis,
+  RepositoryAnalysis,
+  SourceReference
+} from '~/types/codeatlas'
 
 interface AiQuestionResponse {
   answer: string
@@ -28,6 +38,34 @@ interface ActivityLogItem extends WorkspaceActivity {
 
 const CLIENT_REQUEST_TIMEOUT_MS = 25000
 const CANONICAL_URL = 'https://code-atlas-web-kappa.vercel.app/'
+const RECENT_ANALYSES_STORAGE_KEY = 'codeatlas:recent-analyses'
+const ANALYSIS_TIMELINE_BASE = [
+  {
+    id: 'connect',
+    label: 'Connect repository',
+    detail: 'Validate the GitHub URL and prepare repository metadata.'
+  },
+  {
+    id: 'index',
+    label: 'Index files',
+    detail: 'Read source paths, manifests, README, and pull request metadata.'
+  },
+  {
+    id: 'architecture',
+    label: 'Map architecture',
+    detail: 'Group modules into entrypoints, services, workers, and data layers.'
+  },
+  {
+    id: 'risk',
+    label: 'Score risk',
+    detail: 'Detect tests, CI, secrets, lifecycle scripts, and broad PR changes.'
+  },
+  {
+    id: 'ai',
+    label: 'Prepare AI context',
+    detail: 'Build grounded source references for Gemini and local fallback answers.'
+  }
+] as const
 
 const config = useRuntimeConfig()
 const activeSection = ref<NavSection>('repository')
@@ -46,7 +84,10 @@ const prReview = ref<PullRequestReview | null>(null)
 const recentAction = ref<WorkspaceActivity | null>(null)
 const recentActionTimeout = ref<ReturnType<typeof setTimeout> | null>(null)
 const activityLog = ref<ActivityLogItem[]>([])
+const recentAnalyses = ref<RecentAnalysis[]>([])
+const analysisProgressStep = ref(ANALYSIS_TIMELINE_BASE.length - 1)
 let activityLogId = 0
+let analysisProgressTimer: ReturnType<typeof setInterval> | null = null
 const answer = ref(
   'This repository is a TypeScript-first SaaS monorepo with a Nuxt dashboard, Fastify API boundary, background workers, and shared packages for GitHub, AI prompts, and repository analysis.'
 )
@@ -112,6 +153,144 @@ const repositoryStats = computed(() => {
       label: 'Community',
       value: `${(repository?.stars ?? 12400).toLocaleString('en-US')} stars`,
       detail: `${(repository?.forks ?? 920).toLocaleString('en-US')} forks`
+    }
+  ]
+})
+const healthSegments = computed<HealthSegment[]>(() => {
+  const highRiskPullRequests = pullRequests.value.filter((pullRequest) => pullRequest.risk === 'High').length
+  const mediumRiskPullRequests = pullRequests.value.filter((pullRequest) => pullRequest.risk === 'Medium').length
+  const securitySignals = riskSignals.value.filter((signal) => /secret|token|auth|permission|scope|credential/i.test(signal)).length
+  const testSignals = riskSignals.value.filter((signal) => /test|coverage|ci|check/i.test(signal)).length
+  const architectureScore = clampScore(78 + architectureNodes.value.length * 2 - riskSignals.value.length * 4)
+  const maintainabilityScore = clampScore(88 - highRiskPullRequests * 8 - mediumRiskPullRequests * 3 + Math.min(sourceReferences.value.length, 8))
+  const securityScore = clampScore(92 - securitySignals * 12 - highRiskPullRequests * 4)
+  const testabilityScore = clampScore(82 - testSignals * 10 - highRiskPullRequests * 4 + (riskSignals.value.length ? 0 : 6))
+  const operationsScore = clampScore(86 - (analysis.value?.repository.truncated ? 10 : 0) + (isDemoMode.value ? 0 : 4))
+
+  return [
+    {
+      label: 'Architecture',
+      score: architectureScore,
+      value: `${architectureNodes.value.length} nodes`,
+      detail: 'Layer coverage, service boundaries, and graph readability.',
+      tone: scoreTone(architectureScore)
+    },
+    {
+      label: 'Maintainability',
+      score: maintainabilityScore,
+      value: `${sourceReferences.value.length} refs`,
+      detail: 'Important source files, PR blast radius, and module clarity.',
+      tone: scoreTone(maintainabilityScore)
+    },
+    {
+      label: 'Security',
+      score: securityScore,
+      value: securitySignals ? `${securitySignals} signals` : 'Clear',
+      detail: 'Secret, token, permission, and auth-sensitive findings.',
+      tone: scoreTone(securityScore)
+    },
+    {
+      label: 'Testability',
+      score: testabilityScore,
+      value: testSignals ? 'Watch' : 'Stable',
+      detail: 'Signals around tests, CI checks, and review coverage.',
+      tone: scoreTone(testabilityScore)
+    },
+    {
+      label: 'Operations',
+      score: operationsScore,
+      value: isDemoMode.value ? 'Demo' : 'Live',
+      detail: 'Runtime mode, truncation state, and deployment readiness.',
+      tone: scoreTone(operationsScore)
+    }
+  ]
+})
+const repositoryHealthScore = computed(() => {
+  const total = healthSegments.value.reduce((sum, segment) => sum + segment.score, 0)
+
+  return Math.round(total / Math.max(healthSegments.value.length, 1))
+})
+const repositoryHealthLabel = computed(() => {
+  if (repositoryHealthScore.value >= 90) {
+    return 'Excellent'
+  }
+
+  if (repositoryHealthScore.value >= 80) {
+    return 'Healthy'
+  }
+
+  if (repositoryHealthScore.value >= 68) {
+    return 'Watch'
+  }
+
+  return 'Risky'
+})
+const analysisTimelineSteps = computed<AnalysisStep[]>(() => {
+  const failedStep = Math.max(0, Math.min(analysisProgressStep.value, ANALYSIS_TIMELINE_BASE.length - 1))
+
+  return ANALYSIS_TIMELINE_BASE.map((step, index) => {
+    let status: AnalysisStep['status'] = 'complete'
+
+    if (analysisError.value && index === failedStep) {
+      status = 'failed'
+    } else if (isAnalyzing.value) {
+      status = index < analysisProgressStep.value ? 'complete' : index === analysisProgressStep.value ? 'active' : 'pending'
+    } else if (analysisError.value) {
+      status = index < failedStep ? 'complete' : 'pending'
+    }
+
+    return {
+      ...step,
+      status
+    }
+  })
+})
+const insightFeed = computed<InsightItem[]>(() => {
+  const risk = riskSignals.value[0]
+  const highRiskPullRequest = pullRequests.value.find((pullRequest) => pullRequest.risk === 'High')
+  const opportunity = summaryItems.value.find((item) => item.tone === 'opportunity')
+  const strength = summaryItems.value.find((item) => item.tone === 'good')
+
+  return [
+    {
+      id: 'health',
+      label: `${repositoryHealthLabel.value} repository health`,
+      detail: `Composite score ${repositoryHealthScore.value}/100 across architecture, maintainability, security, tests, and operations.`,
+      tone: repositoryHealthScore.value >= 80 ? 'good' : repositoryHealthScore.value >= 68 ? 'warning' : 'risk',
+      section: 'reports',
+      action: 'Open reports'
+    },
+    {
+      id: 'risk',
+      label: risk ? 'Top risk signal' : 'Risk scan clean',
+      detail: risk ?? 'No blocking repository hygiene risks were detected in the current analysis.',
+      tone: risk ? 'risk' : 'good',
+      section: risk ? 'pr-review' : 'architecture',
+      action: risk ? 'Review risk' : 'Inspect architecture'
+    },
+    {
+      id: 'pr',
+      label: highRiskPullRequest ? `Escalated PR ${highRiskPullRequest.id}` : 'Pull requests ready',
+      detail: highRiskPullRequest
+        ? `${highRiskPullRequest.title} touches ${highRiskPullRequest.changedFiles} files and should be reviewed before merge.`
+        : `${pullRequests.value.length} pull requests are available with no high-risk item first in queue.`,
+      tone: highRiskPullRequest ? 'warning' : 'info',
+      section: 'pr-review',
+      action: 'Open PR review'
+    },
+    {
+      id: 'opportunity',
+      label: opportunity?.label ?? 'Next opportunity',
+      detail: opportunity?.text ?? 'Ask CodeAtlas for a targeted refactor or test plan.',
+      tone: 'info',
+      section: 'ask',
+      action: 'Ask CodeAtlas'
+    },
+    {
+      id: 'strength',
+      label: strength?.label ?? 'Strength detected',
+      detail: strength?.text ?? 'The repository has enough source references for a grounded first pass.',
+      tone: 'good'
     }
   ]
 })
@@ -383,6 +562,87 @@ const startNewAnalysis = async () => {
   await focusRepositoryInput()
 }
 
+const selectRecentAnalysis = async (repository: string) => {
+  repoUrl.value = `github.com/${repository}`
+  activeSection.value = 'repository'
+  notifyWorkspace('Recent analysis selected', `${repository} is ready to run again.`, 'info')
+  await focusRepositoryInput()
+}
+
+const loadRecentAnalyses = () => {
+  if (!import.meta.client) {
+    return
+  }
+
+  try {
+    const saved = window.localStorage.getItem(RECENT_ANALYSES_STORAGE_KEY)
+
+    if (saved) {
+      const parsed = JSON.parse(saved) as RecentAnalysis[]
+
+      if (Array.isArray(parsed)) {
+        recentAnalyses.value = parsed.filter(isRecentAnalysis).slice(0, 6)
+      }
+    }
+  } catch {
+    recentAnalyses.value = []
+  }
+
+  if (!recentAnalyses.value.length) {
+    recentAnalyses.value = [buildRecentAnalysisEntry()]
+  }
+}
+
+const persistRecentAnalyses = () => {
+  if (!import.meta.client) {
+    return
+  }
+
+  window.localStorage.setItem(RECENT_ANALYSES_STORAGE_KEY, JSON.stringify(recentAnalyses.value.slice(0, 6)))
+}
+
+const recordRecentAnalysis = () => {
+  const entry = buildRecentAnalysisEntry()
+  recentAnalyses.value = [
+    entry,
+    ...recentAnalyses.value.filter((analysisItem) => analysisItem.repository !== entry.repository)
+  ].slice(0, 6)
+  persistRecentAnalyses()
+}
+
+const buildRecentAnalysisEntry = (): RecentAnalysis => {
+  const repository = analysis.value?.repository
+
+  return {
+    id: `${repositoryName.value}-${Date.now()}`,
+    repository: repositoryName.value,
+    description: repositoryDescription.value,
+    score: repositoryHealthScore.value,
+    healthLabel: repositoryHealthLabel.value,
+    analyzedAt: formatRecentAnalysisTime(new Date()),
+    meta: `${(repository?.fileCount ?? 1842).toLocaleString('en-US')} files - ${formatLoc(repository?.estimatedLoc ?? 612000)} LOC`
+  }
+}
+
+const startAnalysisProgress = () => {
+  stopAnalysisProgress()
+  analysisProgressStep.value = 0
+  analysisProgressTimer = setInterval(() => {
+    analysisProgressStep.value = Math.min(analysisProgressStep.value + 1, ANALYSIS_TIMELINE_BASE.length - 1)
+  }, 850)
+}
+
+const stopAnalysisProgress = (completed = true) => {
+  if (analysisProgressTimer) {
+    clearInterval(analysisProgressTimer)
+    analysisProgressTimer = null
+  }
+
+  if (completed) {
+    analysisProgressStep.value = ANALYSIS_TIMELINE_BASE.length - 1
+  }
+}
+
 const toggleWorkspaceSetting = (key: WorkspaceSettingKey) => {
   workspaceSettings[key] = !workspaceSettings[key]
   notifyWorkspace(
@@ -426,6 +686,8 @@ const analyzeRepository = async () => {
   isAnalyzing.value = true
   analysisError.value = ''
   lastAnalyzedAt.value = 'Analysis started now'
+  startAnalysisProgress()
+  let succeeded = false
 
   try {
     const result = isDemoMode.value
@@ -446,13 +708,16 @@ const analyzeRepository = async () => {
     prReview.value = null
     answer.value = result.answer
     lastAnalyzedAt.value = `Completed just now - ${result.repository.fileCount.toLocaleString('en-US')} files - ${formatLoc(result.repository.estimatedLoc)} LOC`
+    recordRecentAnalysis()
     notifyWorkspace('Repository analysis complete', `${result.repository.fullName} is ready.`, 'success')
+    succeeded = true
   } catch (error) {
     analysisError.value = getErrorMessage(error)
     lastAnalyzedAt.value = 'Analysis failed'
     notifyWorkspace('Repository analysis failed', analysisError.value, 'danger')
   } finally {
     isAnalyzing.value = false
+    stopAnalysisProgress(succeeded)
   }
 }
 
@@ -638,6 +903,49 @@ function formatActivityTime(date: Date) {
   })
 }
 
+function formatRecentAnalysisTime(date: Date) {
+  return date.toLocaleString('en-US', {
+    month: 'short',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
+
+function clampScore(score: number) {
+  return Math.max(40, Math.min(Math.round(score), 100))
+}
+
+function scoreTone(score: number): HealthSegment['tone'] {
+  if (score >= 80) {
+    return 'good'
+  }
+
+  if (score >= 68) {
+    return 'watch'
+  }
+
+  return 'risk'
+}
+
+function isRecentAnalysis(value: unknown): value is RecentAnalysis {
+  if (typeof value !== 'object' || !value) {
+    return false
+  }
+
+  const item = value as Partial<RecentAnalysis>
+
+  return (
+    typeof item.id === 'string' &&
+    typeof item.repository === 'string' &&
+    typeof item.description === 'string' &&
+    typeof item.score === 'number' &&
+    typeof item.healthLabel === 'string' &&
+    typeof item.analyzedAt === 'string' &&
+    typeof item.meta === 'string'
+  )
+}
+
 function isAbortError(error: unknown) {
   if (typeof error !== 'object' || !error) {
     return false
@@ -667,10 +975,16 @@ function getErrorMessage(error: unknown) {
   return 'Unable to analyze this repository.'
 }
 
+onMounted(() => {
+  loadRecentAnalyses()
+})
+
 onBeforeUnmount(() => {
   if (recentActionTimeout.value) {
     clearTimeout(recentActionTimeout.value)
   }
+
+  stopAnalysisProgress(false)
 })
 </script>
 
@@ -745,6 +1059,25 @@ onBeforeUnmount(() => {
               @view-report="changeSection('reports')"
             />
 
+            <section class="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(280px,360px)_minmax(0,1fr)_minmax(280px,360px)]">
+              <RepositoryHealthScore
+                :score="repositoryHealthScore"
+                :label="repositoryHealthLabel"
+                :repository-name="repositoryName"
+                :segments="healthSegments"
+              />
+              <AnalysisTimeline
+                :steps="analysisTimelineSteps"
+                :is-busy="isAnalyzing"
+                :updated-at="lastAnalyzedAt"
+              />
+              <RecentAnalyses
+                :analyses="recentAnalyses"
+                :active-repository="repositoryName"
+                @select="selectRecentAnalysis"
+              />
+            </section>
+
             <section class="atlas-panel overflow-hidden">
               <div class="flex flex-col gap-2 border-b border-atlas-line px-4 py-3 md:flex-row md:items-center md:justify-between">
                 <h3 class="ui-title text-base">Repository snapshot</h3>
@@ -760,15 +1093,24 @@ onBeforeUnmount(() => {
             </section>
 
             <section class="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(340px,520px)]">
+              <InsightFeed :insights="insightFeed" @open="changeSection" />
+              <AiSummaryPanel :summary-items="summaryItems" :answer="answer" :references="sourceReferences" />
+            </section>
+
+            <section class="grid grid-cols-1 gap-4">
               <SourceReferences :references="sourceReferences" />
-              <AiSummaryPanel :summary-items="summaryItems" :answer="answer" />
             </section>
           </section>
 
           <section v-else-if="activeSection === 'architecture'" class="flex flex-col gap-4">
+            <ArchitectureMap
+              :nodes="architectureNodes"
+              :references="sourceReferences"
+              :risk-signals="riskSignals"
+            />
             <section class="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(340px,520px)]">
-              <ArchitectureMap :nodes="architectureNodes" />
-              <AiSummaryPanel :summary-items="summaryItems" :answer="answer" />
+              <InsightFeed :insights="insightFeed" @open="changeSection" />
+              <AiSummaryPanel :summary-items="summaryItems" :answer="answer" :references="sourceReferences" />
             </section>
             <SourceReferences :references="sourceReferences" />
           </section>
@@ -804,7 +1146,7 @@ onBeforeUnmount(() => {
               </div>
             </section>
             <section class="flex flex-col gap-4">
-              <AiSummaryPanel :summary-items="summaryItems" :answer="answer" />
+              <AiSummaryPanel :summary-items="summaryItems" :answer="answer" :references="sourceReferences" />
               <SourceReferences :references="sourceReferences" />
             </section>
           </section>
@@ -944,7 +1286,7 @@ onBeforeUnmount(() => {
               </div>
             </section>
 
-            <AiSummaryPanel :summary-items="summaryItems" :answer="answer" />
+            <AiSummaryPanel :summary-items="summaryItems" :answer="answer" :references="sourceReferences" />
           </section>
 
           <section v-else-if="activeSection === 'integrations'" class="grid grid-cols-1 gap-4 xl:grid-cols-2">
