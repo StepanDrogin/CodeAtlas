@@ -11,20 +11,21 @@ export default <Partial<Config>>{
     extend: {
       colors: {
         atlas: {
-          canvas: '#f7f9fb',
+          canvas: '#f5f8fb',
           surface: '#ffffff',
-          rail: '#eef7f5',
-          ink: '#121826',
-          muted: '#667085',
-          subtle: '#98a2b3',
-          border: '#dce3ea',
-          line: '#e7edf3',
-          accent: '#007a68',
-          accentDark: '#005b4f',
+          rail: '#eaf8f6',
+          ink: '#101828',
+          muted: '#64748b',
+          subtle: '#94a3b8',
+          border: '#d8e2ec',
+          line: '#edf2f7',
+          accent: '#007f78',
+          accentDark: '#005f5b',
           success: '#12b76a',
           warning: '#f79009',
           danger: '#d92d20',
           info: '#2e90fa',
+          cyan: '#08aeb8',
           violet: '#7a5af8'
         }
       },
@@ -32,8 +33,9 @@ export default <Partial<Config>>{
         atlas: '8px'
       },
       boxShadow: {
-        atlas: '0 10px 30px rgba(18, 24, 38, 0.06)',
-        insetLine: 'inset 0 0 0 1px rgba(220, 227, 234, 0.9)'
+        atlas: '0 18px 45px rgba(16, 24, 40, 0.07)',
+        insetLine: 'inset 0 0 0 1px rgba(216, 226, 236, 0.92)',
+        instrument: '0 24px 60px rgba(0, 127, 120, 0.16)'
       },
       fontFamily: {
         sans: [

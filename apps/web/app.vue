@@ -460,7 +460,7 @@ useHead(() => ({
     { name: 'application-name', content: 'CodeAtlas' },
     { name: 'author', content: 'Stepan Drogin' },
     { name: 'robots', content: 'index, follow, max-image-preview:large' },
-    { name: 'theme-color', content: '#007a68' },
+    { name: 'theme-color', content: '#007f78' },
     { name: 'color-scheme', content: 'light' },
     { property: 'og:type', content: 'website' },
     { property: 'og:site_name', content: 'CodeAtlas' },
@@ -990,7 +990,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div
-    class="min-h-screen overflow-x-hidden bg-atlas-canvas text-atlas-ink"
+    class="atlas-contours min-h-screen overflow-x-hidden bg-atlas-canvas text-atlas-ink"
     :aria-busy="isWorkspaceBusy"
   >
     <div v-if="isWorkspaceBusy" class="fixed inset-x-0 top-0 z-50 h-1 bg-atlas-accent/10" role="status" aria-live="polite">
@@ -1037,13 +1037,14 @@ onBeforeUnmount(() => {
           @open-section="changeSection"
         />
 
-        <main class="mx-auto flex max-w-[1540px] flex-col gap-4 px-4 py-5 md:px-6">
-          <section class="flex flex-col gap-3 border-b border-atlas-line pb-4 md:flex-row md:items-end md:justify-between">
+        <main class="mx-auto flex max-w-[1640px] flex-col gap-5 px-4 py-6 md:px-7">
+          <section class="flex flex-col gap-3 border-b border-atlas-line/80 pb-5 md:flex-row md:items-end md:justify-between">
             <div>
               <p class="atlas-muted-label">{{ currentSection.label }}</p>
-              <h2 class="ui-title mt-1 text-2xl">{{ currentSection.label }}</h2>
+              <h2 class="ui-title mt-1 text-[28px] leading-tight">{{ currentSection.label }}</h2>
+              <p class="mt-1 max-w-2xl text-sm leading-6 text-atlas-muted">{{ pageDescription }}</p>
             </div>
-            <span class="ui-span inline-flex w-fit items-center rounded-atlas border border-atlas-border bg-white px-3 py-2 text-sm font-medium text-atlas-muted shadow-sm">
+            <span class="ui-span inline-flex w-fit items-center rounded-atlas border border-atlas-border bg-white/90 px-3 py-2 text-sm font-medium text-atlas-muted shadow-sm">
               {{ sectionMeta }}
             </span>
           </section>
@@ -1059,7 +1060,7 @@ onBeforeUnmount(() => {
               @view-report="changeSection('reports')"
             />
 
-            <section class="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(280px,360px)_minmax(0,1fr)_minmax(280px,360px)]">
+            <section class="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(320px,420px)_minmax(0,1fr)] 2xl:grid-cols-[minmax(320px,420px)_minmax(0,1fr)_minmax(300px,360px)]">
               <RepositoryHealthScore
                 :score="repositoryHealthScore"
                 :label="repositoryHealthLabel"
@@ -1072,6 +1073,7 @@ onBeforeUnmount(() => {
                 :updated-at="lastAnalyzedAt"
               />
               <RecentAnalyses
+                class="xl:col-span-2 2xl:col-span-1"
                 :analyses="recentAnalyses"
                 :active-repository="repositoryName"
                 @select="selectRecentAnalysis"

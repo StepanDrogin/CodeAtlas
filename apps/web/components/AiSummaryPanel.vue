@@ -59,7 +59,10 @@ onBeforeUnmount(() => {
 <template>
   <section class="atlas-panel flex h-full flex-col">
     <div class="flex items-center justify-between border-b border-atlas-line px-4 py-3">
-      <h2 class="ui-title text-base">Analysis summary</h2>
+      <div class="flex items-center gap-3">
+        <h2 class="ui-title text-base">AI summary</h2>
+        <span class="ui-span rounded-full bg-violet-50 px-2.5 py-1 text-xs font-semibold text-atlas-violet">Grounded</span>
+      </div>
       <button
         type="button"
         class="ui-button h-8 border-atlas-border bg-white px-3 text-xs text-atlas-muted hover:text-atlas-ink"
@@ -70,7 +73,7 @@ onBeforeUnmount(() => {
       </button>
     </div>
     <div class="flex flex-1 flex-col gap-4 px-4 py-4">
-      <div class="rounded-atlas border border-atlas-line bg-atlas-canvas px-3 py-3">
+      <div class="rounded-atlas border border-atlas-line bg-atlas-canvas/80 px-4 py-4">
         <p class="text-sm leading-6 text-atlas-ink">
           {{ answer }}
         </p>
@@ -102,11 +105,12 @@ onBeforeUnmount(() => {
         </div>
       </div>
       <div class="rounded-atlas border border-atlas-line bg-white px-3 py-3">
-        <h3 class="ui-title text-sm">Suggested next steps</h3>
+        <h3 class="ui-title text-sm">Top recommendations</h3>
         <div class="mt-3 space-y-2">
-          <p v-for="step in nextSteps" :key="step" class="text-xs leading-5 text-atlas-muted">
-            {{ step }}
-          </p>
+          <div v-for="step in nextSteps" :key="step" class="flex gap-2 text-xs leading-5 text-atlas-muted">
+            <span class="ui-span mt-0.5 text-atlas-success">OK</span>
+            <p>{{ step }}</p>
+          </div>
         </div>
       </div>
       <div class="mt-auto flex items-center justify-between pt-2 text-xs text-atlas-muted">

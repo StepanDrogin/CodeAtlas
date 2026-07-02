@@ -23,6 +23,8 @@ const rowClass: Record<AnalysisStep['status'], string> = {
   pending: 'border-atlas-line bg-white/70',
   failed: 'border-red-100 bg-red-50'
 }
+
+const stepDurations = ['2m 14s', '3m 21s', '4m 07s', '1m 12s', '45s']
 </script>
 
 <template>
@@ -41,28 +43,41 @@ const rowClass: Record<AnalysisStep['status'], string> = {
       </span>
     </div>
 
-    <div class="border-b border-atlas-line bg-atlas-canvas px-4 py-3">
-      <div class="h-2 overflow-hidden rounded-full bg-white shadow-insetLine">
-        <div class="h-full rounded-full bg-atlas-accent transition-all duration-500 ease-out" :style="{ width: progressWidth }"></div>
+    <div class="p-5">
+      <div class="relative overflow-x-auto pb-2">
+        <div class="absolute left-7 right-7 top-[15px] h-0.5 bg-atlas-border"></div>
+        <div class="absolute left-7 top-[15px] h-0.5 bg-atlas-accent transition-all duration-500" :style="{ width: progressWidth }"></div>
+        <div class="relative grid min-w-[560px] grid-cols-5 gap-3 md:gap-4">
+          <article
+            v-for="(step, index) in steps"
+            :key="step.id"
+            class="min-w-0"
+          >
+            <span class="ui-span relative z-10 mx-auto grid h-8 w-8 place-items-center rounded-full border text-xs font-bold" :class="dotClass[step.status]">
+              <span v-if="step.status === 'active'" class="ui-span h-3 w-3 animate-spin rounded-full border-2 border-white/35 border-t-white"></span>
+              <span v-else class="ui-span">{{ step.status === 'complete' ? 'OK' : step.status === 'failed' ? '!' : index + 1 }}</span>
+            </span>
+            <div class="mt-3 text-center">
+              <h3 class="ui-title truncate text-sm">{{ step.label }}</h3>
+              <p class="mt-1 text-xs text-atlas-muted">{{ stepDurations[index] }}</p>
+            </div>
+          </article>
+        </div>
       </div>
-    </div>
 
-    <div class="space-y-2 p-3">
-      <article
-        v-for="(step, index) in steps"
+      <div
+        v-for="step in steps.filter((item) => item.status === 'active').slice(0, 1)"
         :key="step.id"
-        class="flex gap-3 rounded-atlas border px-3 py-3 transition duration-200"
+        class="mt-4 flex items-center gap-3 rounded-atlas border px-3 py-3"
         :class="rowClass[step.status]"
       >
-        <span class="ui-span grid h-7 w-7 shrink-0 place-items-center rounded-full border text-xs font-bold" :class="dotClass[step.status]">
-          <span v-if="step.status === 'active'" class="ui-span h-3 w-3 animate-spin rounded-full border-2 border-white/35 border-t-white"></span>
-          <span v-else class="ui-span">{{ step.status === 'complete' ? 'OK' : step.status === 'failed' ? '!' : index + 1 }}</span>
-        </span>
-        <div class="min-w-0">
-          <h3 class="ui-title text-sm">{{ step.label }}</h3>
-          <p class="mt-1 text-xs leading-5 text-atlas-muted">{{ step.detail }}</p>
-        </div>
-      </article>
+        <span class="ui-span text-atlas-violet">*</span>
+        <p class="text-sm leading-5 text-atlas-muted">{{ step.detail }}</p>
+      </div>
+      <div v-if="!isBusy" class="mt-4 flex items-center gap-3 rounded-atlas border border-atlas-line bg-atlas-canvas px-3 py-3">
+        <span class="ui-span h-2 w-2 rounded-full bg-atlas-success"></span>
+        <p class="text-sm leading-5 text-atlas-muted">Repository intelligence is ready for source-grounded questions and review workflows.</p>
+      </div>
     </div>
   </section>
 </template>

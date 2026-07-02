@@ -10,13 +10,6 @@ const props = withDefaults(defineProps<{
   riskSignals: () => []
 })
 
-const columns = [
-  { id: 'entry', label: 'Entry' },
-  { id: 'backend', label: 'Backend' },
-  { id: 'workers', label: 'Workers' },
-  { id: 'data', label: 'Data' }
-] as const
-
 const selectedNodeId = ref(props.nodes[0]?.id ?? '')
 
 const nodeTone: Record<ArchitectureNode['kind'], string> = {
@@ -36,6 +29,17 @@ const kindLabel: Record<ArchitectureNode['kind'], string> = {
 }
 
 const selectedNode = computed(() => props.nodes.find((node) => node.id === selectedNodeId.value) ?? props.nodes[0])
+const surroundingNodes = computed(() => props.nodes.filter((node) => node.id !== selectedNode.value?.id).slice(0, 8))
+const nodePositions = [
+  'left-[5%] top-[42%]',
+  'left-[18%] top-[18%]',
+  'left-[34%] top-[68%]',
+  'left-[58%] top-[14%]',
+  'left-[70%] top-[36%]',
+  'left-[62%] top-[66%]',
+  'left-[82%] top-[54%]',
+  'left-[38%] top-[28%]'
+]
 const selectedReferences = computed(() => {
   const node = selectedNode.value
 
@@ -73,8 +77,6 @@ const selectedRisks = computed(() => {
     })
     .slice(0, 3)
 })
-
-const nodesByColumn = (column: ArchitectureNode['column']) => props.nodes.filter((node) => node.column === column)
 
 watch(
   () => props.nodes,
@@ -114,39 +116,43 @@ watch(
     </div>
 
     <div class="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_360px]">
-      <div class="relative min-h-[430px] overflow-x-auto overflow-y-hidden bg-[radial-gradient(circle_at_1px_1px,#dce3ea_1px,transparent_0)] p-5 [background-size:18px_18px]">
-        <svg aria-hidden="true" class="pointer-events-none absolute inset-0 h-full w-full text-slate-400/80" viewBox="0 0 960 430" preserveAspectRatio="none">
-          <path d="M122 210 C220 210 218 104 315 104" fill="none" stroke="currentColor" stroke-width="2" />
-          <path d="M122 210 C220 210 218 182 315 182" fill="none" stroke="currentColor" stroke-width="2" />
-          <path d="M122 210 C220 210 218 260 315 260" fill="none" stroke="currentColor" stroke-width="2" />
-          <path d="M430 134 C522 134 520 112 606 112" fill="none" stroke="currentColor" stroke-width="2" />
-          <path d="M430 260 C522 260 520 228 606 228" fill="none" stroke="currentColor" stroke-width="2" />
-          <path d="M710 112 C780 112 780 164 846 164" fill="none" stroke="currentColor" stroke-width="2" />
-          <path d="M710 228 C780 228 780 236 846 236" fill="none" stroke="currentColor" stroke-width="2" />
-        </svg>
+      <div class="atlas-canvas relative min-h-[500px] overflow-x-auto overflow-y-hidden p-5">
+        <div class="relative h-[460px] min-w-[760px] overflow-hidden rounded-atlas border border-atlas-line bg-white/68 shadow-insetLine xl:min-w-0">
+          <svg aria-hidden="true" class="pointer-events-none absolute inset-0 h-full w-full text-slate-400/70" viewBox="0 0 960 460" preserveAspectRatio="none">
+            <path d="M480 230 C360 210 280 190 170 210" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="8 8" />
+            <path d="M480 230 C400 130 300 108 210 96" fill="none" stroke="currentColor" stroke-width="2" />
+            <path d="M480 230 C390 295 330 330 258 352" fill="none" stroke="currentColor" stroke-width="2" />
+            <path d="M480 230 C548 122 610 96 680 86" fill="none" stroke="currentColor" stroke-width="2" />
+            <path d="M480 230 C604 214 688 202 760 210" fill="none" stroke="currentColor" stroke-width="2" />
+            <path d="M480 230 C582 306 638 336 704 348" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="8 8" />
+            <path d="M480 230 C654 256 742 292 838 304" fill="none" stroke="currentColor" stroke-width="2" />
+            <path d="M480 230 C462 166 432 136 386 122" fill="none" stroke="currentColor" stroke-width="2" />
+          </svg>
 
-        <div class="relative grid h-full min-w-[720px] grid-cols-4 gap-5 xl:min-w-0 xl:gap-6">
-          <div v-for="column in columns" :key="column.id" class="flex flex-col justify-center gap-4">
-            <div class="mb-1 text-center">
-              <span class="ui-span rounded border border-atlas-border bg-white px-2 py-1 text-xs font-medium text-atlas-muted">
-                {{ column.label }}
-              </span>
-            </div>
-            <button
-              v-for="node in nodesByColumn(column.id)"
-              :key="node.id"
-              type="button"
-              class="ui-button w-full flex-col items-start gap-1 rounded-atlas border px-3 py-3 text-left shadow-sm"
-              :class="[nodeTone[node.kind], selectedNode?.id === node.id ? 'ring-2 ring-atlas-accent/30' : '']"
-              :aria-pressed="selectedNode?.id === node.id"
-              @click="selectedNodeId = node.id"
-            >
-              <span class="ui-span flex w-full items-center justify-between gap-2">
-                <span class="ui-span min-w-0 text-sm font-semibold leading-5">{{ node.label }}</span>
-                <span class="ui-span rounded bg-white/80 px-2 py-0.5 text-[11px] font-semibold">{{ kindLabel[node.kind] }}</span>
-              </span>
-              <span class="ui-span text-xs opacity-80">{{ node.detail }}</span>
-            </button>
+          <div v-if="selectedNode" class="absolute left-1/2 top-1/2 z-10 flex h-32 w-32 -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center rounded-full bg-atlas-accent p-4 text-center text-white shadow-instrument">
+            <span class="ui-span text-xs font-semibold opacity-80">{{ kindLabel[selectedNode.kind] }}</span>
+            <span class="ui-span mt-1 text-sm font-semibold leading-5">{{ selectedNode.label }}</span>
+          </div>
+
+          <button
+            v-for="(node, index) in surroundingNodes"
+            :key="node.id"
+            type="button"
+            class="ui-button absolute z-10 w-40 flex-col items-start gap-1 rounded-atlas border bg-white/94 px-3 py-3 text-left shadow-sm backdrop-blur hover:shadow-atlas"
+            :class="[nodeTone[node.kind], nodePositions[index % nodePositions.length]]"
+            @click="selectedNodeId = node.id"
+          >
+            <span class="ui-span flex w-full items-center justify-between gap-2">
+              <span class="ui-span min-w-0 text-sm font-semibold leading-5">{{ node.label }}</span>
+              <span class="ui-span rounded bg-white/80 px-2 py-0.5 text-[11px] font-semibold">{{ kindLabel[node.kind] }}</span>
+            </span>
+            <span class="ui-span text-xs opacity-80">{{ node.detail }}</span>
+          </button>
+
+          <div class="absolute bottom-5 left-1/2 flex -translate-x-1/2 items-center gap-4 rounded-atlas border border-atlas-line bg-white/92 px-4 py-2 shadow-sm backdrop-blur">
+            <span class="ui-span inline-flex items-center gap-1 text-xs text-atlas-muted"><span class="ui-span h-2 w-5 rounded-full bg-atlas-accent"></span>Service</span>
+            <span class="ui-span inline-flex items-center gap-1 text-xs text-atlas-muted"><span class="ui-span h-2 w-5 rounded-full bg-atlas-violet"></span>Worker</span>
+            <span class="ui-span inline-flex items-center gap-1 text-xs text-atlas-muted"><span class="ui-span h-2 w-5 rounded-full bg-atlas-border"></span>External</span>
           </div>
         </div>
       </div>

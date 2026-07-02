@@ -9,7 +9,7 @@ const props = defineProps<{
 }>()
 
 const ringStyle = computed(() => ({
-  background: `conic-gradient(#007a68 ${Math.max(0, Math.min(props.score, 100)) * 3.6}deg, #e7edf3 0deg)`
+  background: `conic-gradient(#007f78 ${Math.max(0, Math.min(props.score, 100)) * 3.6}deg, #b8eee9 ${Math.max(0, Math.min(props.score, 100)) * 3.6 + 36}deg, #e7eef5 0deg)`
 }))
 
 const toneClass: Record<HealthSegment['tone'], string> = {
@@ -32,23 +32,24 @@ const barClass: Record<HealthSegment['tone'], string> = {
       <p class="mt-1 truncate text-xs text-atlas-muted">{{ repositoryName }}</p>
     </div>
 
-    <div class="grid gap-4 p-4 md:grid-cols-[170px_minmax(0,1fr)] xl:grid-cols-1 2xl:grid-cols-[170px_minmax(0,1fr)]">
+    <div class="grid gap-5 p-5 md:grid-cols-[180px_minmax(0,1fr)] xl:grid-cols-1 2xl:grid-cols-[180px_minmax(0,1fr)]">
       <div class="flex items-center justify-center">
-        <div class="relative grid h-36 w-36 place-items-center rounded-full p-2 shadow-insetLine" :style="ringStyle">
-          <div class="grid h-full w-full place-items-center rounded-full bg-white shadow-atlas">
+        <div class="relative grid h-40 w-40 place-items-center rounded-full p-3 shadow-instrument" :style="ringStyle">
+          <div class="grid h-full w-full place-items-center rounded-full bg-white shadow-[inset_0_0_0_1px_rgba(216,226,236,.9)]">
             <div class="text-center">
-              <span class="ui-span block text-4xl font-semibold text-atlas-ink">{{ score }}</span>
-              <span class="ui-span mt-1 block text-xs font-semibold uppercase text-atlas-muted">{{ label }}</span>
+              <span class="ui-span block text-[42px] font-semibold leading-none text-atlas-ink">{{ score }}</span>
+              <span class="ui-span mt-1 block text-sm text-atlas-muted">/100</span>
+              <span class="ui-span mt-2 inline-flex rounded-full bg-atlas-rail px-2.5 py-1 text-[11px] font-semibold uppercase text-atlas-accent">{{ label }}</span>
             </div>
           </div>
         </div>
       </div>
 
-      <div class="space-y-3">
-        <article v-for="segment in segments" :key="segment.label" class="rounded-atlas border border-atlas-line bg-white px-3 py-3">
+      <div class="divide-y divide-atlas-line">
+        <article v-for="segment in segments" :key="segment.label" class="py-3 first:pt-0 last:pb-0">
           <div class="flex items-start justify-between gap-3">
             <div class="min-w-0">
-              <h3 class="ui-title text-sm">{{ segment.label }}</h3>
+              <h3 class="ui-title text-sm leading-5">{{ segment.label }}</h3>
               <p class="mt-1 text-xs leading-5 text-atlas-muted">{{ segment.detail }}</p>
             </div>
             <span class="ui-span rounded px-2 py-1 text-xs font-semibold" :class="toneClass[segment.tone]">{{ segment.value }}</span>

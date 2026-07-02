@@ -95,8 +95,8 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <header class="sticky top-0 z-20 flex flex-col items-stretch gap-3 border-b border-atlas-border bg-atlas-surface/95 px-4 py-3 backdrop-blur md:flex-row md:items-center md:justify-between md:px-6">
-    <form class="relative w-full max-w-[760px]" :aria-busy="isAsking" @submit.prevent="$emit('ask')">
+  <header class="sticky top-0 z-20 flex flex-col items-stretch gap-3 border-b border-atlas-border bg-white/88 px-4 py-3 shadow-[0_10px_30px_rgba(16,24,40,0.035)] backdrop-blur-xl md:flex-row md:items-center md:justify-between md:px-6">
+    <form class="relative min-w-0 w-full max-w-[820px] md:mx-0 md:flex-1" :aria-busy="isAsking" @submit.prevent="$emit('ask')">
       <svg aria-hidden="true" class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-atlas-muted" viewBox="0 0 24 24" fill="none">
         <path d="m21 21-4.3-4.3m2.3-5.2a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
       </svg>
@@ -106,7 +106,7 @@ onBeforeUnmount(() => {
         class="atlas-control w-full pl-9 pr-16"
         type="search"
         aria-label="Ask CodeAtlas"
-        placeholder="Ask CodeAtlas..."
+        placeholder="Search repositories, files, symbols..."
       >
       <span
         class="ui-span absolute right-3 top-1/2 inline-flex -translate-y-1/2 items-center gap-1 rounded border border-atlas-border bg-atlas-canvas px-2 py-0.5 text-xs text-atlas-muted"
@@ -117,10 +117,10 @@ onBeforeUnmount(() => {
       </span>
     </form>
 
-    <div class="relative flex items-center justify-between gap-2 md:ml-6 md:justify-end">
+    <div class="relative flex shrink-0 items-center justify-between gap-2 md:ml-6 md:justify-end">
       <button
         type="button"
-        class="ui-button h-9 w-9 border-atlas-border bg-white text-atlas-muted hover:text-atlas-ink"
+        class="ui-button h-10 w-10 border-atlas-border bg-white text-atlas-muted shadow-sm hover:border-atlas-accent hover:text-atlas-ink"
         aria-label="Quick actions"
         :aria-expanded="activePanel === 'actions'"
         @click="togglePanel('actions')"
@@ -129,7 +129,7 @@ onBeforeUnmount(() => {
       </button>
       <button
         type="button"
-        class="ui-button h-9 border-atlas-border bg-white px-3 text-atlas-ink hover:border-atlas-accent hover:text-atlas-accent"
+        class="ui-button h-10 border-atlas-accent bg-atlas-accent px-4 text-white shadow-instrument hover:bg-atlas-accentDark"
         aria-label="New analysis"
         @click="startNewAnalysis"
       >
@@ -138,7 +138,7 @@ onBeforeUnmount(() => {
       </button>
       <button
         type="button"
-        class="ui-button relative h-9 w-9 border-atlas-border bg-white text-atlas-muted hover:text-atlas-ink"
+        class="ui-button relative h-10 w-10 border-atlas-border bg-white text-atlas-muted shadow-sm hover:border-atlas-accent hover:text-atlas-ink"
         aria-label="Activity log"
         :aria-expanded="activePanel === 'activity'"
         @click="togglePanel('activity')"
@@ -148,7 +148,7 @@ onBeforeUnmount(() => {
       </button>
       <button
         type="button"
-        class="ui-button h-9 w-9 rounded-full border-atlas-border bg-atlas-canvas p-0 text-xs font-semibold text-atlas-ink shadow-insetLine hover:border-atlas-accent hover:text-atlas-accent"
+        class="ui-button h-10 w-10 rounded-full border-atlas-border bg-atlas-ink p-0 text-xs font-semibold text-white shadow-sm hover:border-atlas-accent hover:bg-atlas-accent"
         aria-label="Workspace menu"
         :aria-expanded="activePanel === 'workspace'"
         @click="togglePanel('workspace')"

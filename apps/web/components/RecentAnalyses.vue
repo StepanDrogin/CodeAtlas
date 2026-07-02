@@ -26,18 +26,22 @@ defineEmits<{
         v-for="analysis in analyses"
         :key="analysis.id"
         type="button"
-        class="ui-button w-full justify-between rounded-none px-4 py-3 text-left hover:bg-atlas-canvas"
+        class="ui-button w-full justify-between rounded-none px-4 py-3 text-left hover:bg-atlas-canvas/80"
         :class="analysis.repository === activeRepository ? 'bg-atlas-rail/70' : ''"
         @click="$emit('select', analysis.repository)"
       >
-        <span class="ui-span min-w-0">
-          <span class="ui-span block truncate text-sm font-semibold text-atlas-ink">{{ analysis.repository }}</span>
-          <span class="ui-span mt-1 block line-clamp-1 text-xs text-atlas-muted">{{ analysis.description }}</span>
-          <span class="ui-span mt-2 block text-xs text-atlas-subtle">{{ analysis.meta }} - {{ analysis.analyzedAt }}</span>
+        <span class="ui-span flex min-w-0 items-center gap-3">
+          <span class="ui-span grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white text-atlas-ink shadow-insetLine">
+            <span class="ui-span text-xs font-semibold">GH</span>
+          </span>
+          <span class="ui-span min-w-0">
+            <span class="ui-span block truncate text-sm font-semibold text-atlas-ink">{{ analysis.repository }}</span>
+            <span class="ui-span mt-1 block truncate text-xs text-atlas-muted">main - {{ analysis.analyzedAt }}</span>
+          </span>
         </span>
-        <span class="ui-span ml-3 flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-full bg-white text-sm font-semibold text-atlas-accent shadow-insetLine">
-          <span class="ui-span block leading-none">{{ analysis.score }}</span>
-          <span class="ui-span mt-0.5 block text-[9px] font-semibold uppercase text-atlas-muted">{{ analysis.healthLabel }}</span>
+        <span class="ui-span ml-3 inline-flex shrink-0 items-center gap-2 text-xs font-semibold text-atlas-muted">
+          <span class="ui-span h-2 w-2 rounded-full" :class="analysis.score >= 80 ? 'bg-atlas-success' : analysis.score >= 68 ? 'bg-atlas-warning' : 'bg-atlas-danger'"></span>
+          {{ analysis.score }}
         </span>
       </button>
     </div>
